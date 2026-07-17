@@ -39,3 +39,35 @@ def test_non_sqlite_database_is_rejected() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, database_url="postgresql://localhost/app")
 
+
+def test_upload_defaults_are_bounded() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.max_upload_bytes == 25 * 1024 * 1024
+    assert settings.min_image_long_edge == 1280
+    assert settings.min_image_short_edge == 720
+    assert settings.max_additional_images == 5
+    assert settings.max_upload_files_per_request == 8
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_upload_mb", 0),
+        ("max_image_pixels", 0),
+        ("max_additional_images", 0),
+        ("max_upload_files_per_request", 2),
+    ],
+)
+def test_invalid_upload_limits_are_rejected(field: str, value: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **{field: value})
+
+
+def test_short_image_edge_cannot_exceed_long_edge() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            min_image_short_edge=1281,
+            min_image_long_edge=1280,
+        )

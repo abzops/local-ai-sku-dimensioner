@@ -14,6 +14,10 @@ if (-not (Test-Path -LiteralPath $Python)) {
 if (-not (Test-Path -LiteralPath $FrontendIndex)) {
     throw "Frontend build is missing. Run npm --prefix frontend run build first."
 }
+$ExpectedRevision = & $Python -c "from backend.app.database import expected_alembic_head; print(expected_alembic_head())"
+if ($LASTEXITCODE -ne 0 -or -not $ExpectedRevision) {
+    throw "Unable to resolve the expected Alembic head."
+}
 
 $TempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $SmokeRoot = [IO.Path]::Combine(
@@ -36,6 +40,7 @@ $PreviousEnvironment = @{
     APP_PORT = $env:APP_PORT
     DATA_ROOT = $env:DATA_ROOT
     DATABASE_URL = $env:DATABASE_URL
+    SMOKE_IMAGE_PATH = $env:SMOKE_IMAGE_PATH
 }
 
 try {
@@ -75,7 +80,7 @@ try {
         if ($null -eq $Health -or $Health.status -ne "ok") {
             throw "Health endpoint did not become ready within 20 seconds."
         }
-        if ($Health.database.revision -ne "0001_phase0") {
+        if ($Health.database.revision -ne $ExpectedRevision) {
             throw "Unexpected database revision: $($Health.database.revision)"
         }
 
@@ -110,6 +115,61 @@ try {
             -UseBasicParsing -TimeoutSec 5
         if ($CssAsset.StatusCode -ne 200 -or -not $CssAsset.Content) {
             throw "Compiled CSS asset was not served correctly."
+        }
+
+        $CreateBody = @{ sku = "PHASE1-SMOKE"; product_name = "Smoke Test Item" } |
+            ConvertTo-Json
+        $CreatedScan = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/scans" `
+            -Method Post -ContentType "application/json" -Body $CreateBody -TimeoutSec 5
+        if (-not $CreatedScan.id -or $CreatedScan.status -ne "draft") {
+            throw "Phase 1 scan creation smoke check failed."
+        }
+
+        $SmokeImage = Join-Path $SmokeRoot "smoke-source.png"
+        $env:SMOKE_IMAGE_PATH = $SmokeImage
+        & $Python -c "import os; from PIL import Image; Image.new('RGB', (1280, 720), (38, 118, 184)).save(os.environ['SMOKE_IMAGE_PATH'], 'PNG')"
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $SmokeImage)) {
+            throw "Unable to create the isolated smoke-test image."
+        }
+
+        Add-Type -AssemblyName System.Net.Http
+        $HttpClient = New-Object System.Net.Http.HttpClient
+        $Multipart = New-Object System.Net.Http.MultipartFormDataContent
+        try {
+            foreach ($View in @("top", "front", "side")) {
+                $ImageContent = New-Object System.Net.Http.ByteArrayContent -ArgumentList (, [IO.File]::ReadAllBytes($SmokeImage))
+                $ImageContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("image/png")
+                $Multipart.Add($ImageContent, $View, "client-name-$View.png")
+            }
+            $UploadResponse = $HttpClient.PostAsync(
+                "http://127.0.0.1:$Port/api/scans/$($CreatedScan.id)/images",
+                $Multipart
+            ).GetAwaiter().GetResult()
+            $UploadBody = $UploadResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if (-not $UploadResponse.IsSuccessStatusCode) {
+                throw "Phase 1 image upload smoke check failed with HTTP $([int]$UploadResponse.StatusCode)."
+            }
+            $UploadPayload = $UploadBody | ConvertFrom-Json
+            if ($UploadPayload.scan.status -ne "ready_for_processing" -or
+                $UploadPayload.uploaded_images.Count -ne 3) {
+                throw "Phase 1 upload response did not report three ready views."
+            }
+            if ($UploadBody -match "storage_key" -or $UploadBody.Contains($SmokeRoot)) {
+                throw "Phase 1 upload response exposed private storage information."
+            }
+        } finally {
+            $Multipart.Dispose()
+            $HttpClient.Dispose()
+        }
+
+        $ReadScan = Invoke-RestMethod `
+            -Uri "http://127.0.0.1:$Port/api/scans/$($CreatedScan.id)" `
+            -Method Get -TimeoutSec 5
+        $History = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/scans" `
+            -Method Get -TimeoutSec 5
+        if ($ReadScan.status -ne "ready_for_processing" -or
+            $History.total -ne 1 -or $History.items[0].id -ne $CreatedScan.id) {
+            throw "Phase 1 scan read or history smoke check failed."
         }
 
         Write-Host "Smoke test passed at http://127.0.0.1:$Port" -ForegroundColor Green

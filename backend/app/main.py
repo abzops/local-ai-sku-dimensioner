@@ -11,6 +11,7 @@ from backend.app import __version__
 from backend.app.api.router import api_router
 from backend.app.config import Settings, get_settings
 from backend.app.database import Database
+from backend.app.errors import register_error_handlers
 from backend.app.frontend import mount_frontend
 from backend.app.logging_config import configure_logging
 
@@ -45,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.settings = active_settings
+    register_error_handlers(application)
     application.include_router(api_router, prefix="/api")
     application.state.frontend_mounted = mount_frontend(
         application,

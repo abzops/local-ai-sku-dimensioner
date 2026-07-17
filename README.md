@@ -1,24 +1,28 @@
 # Local AI SKU Dimensioner
 
-A Windows-first, fully local web application foundation for calibrated SKU dimensioning. The final
+A Windows-first, fully local web application for building image-complete SKU scan records. The final
 product will derive external length, breadth, and height from multiple mobile images using
 deterministic OpenCV geometry. Local AI may later assist segmentation and broad shape
 classification, but it will not invent authoritative measurements.
 
 ## Current scope
 
-Phase 0 provides:
+Phase 1 provides:
 
-- FastAPI application and migration-head-aware `GET /api/health`
-- Typed local configuration
-- SQLite initialization with Alembic
-- React, TypeScript, and Vite application shell
-- Visible API and database health status
-- Windows setup, development, production, test, and smoke-test scripts
-- Backend and frontend automated tests
+- The validated Phase 0 runtime, health, migration, production-serving, and Windows-script foundation
+- SQLite scan and image metadata records with Alembic migration history
+- Create, read, and paginated history APIs under `/api/scans`
+- Atomic multipart upload of top, front, side, and optional additional images
+- Server-generated storage names under the local data root; client filenames are never persisted
+- Extension, MIME, size, decode, format, animation, pixel-count, and resolution validation
+- Parser-level file/count bounds that stop oversized multipart parts before temporary storage grows
+- New Scan, History, and Scan Detail pages with image previews and mobile camera inputs
+- Structured retryable errors without local paths, filenames, stack traces, or raw exceptions
+- Backend unit/integration tests and frontend component/API tests
 
-Phase 0 does **not** provide SKU records, image upload, marker detection, OpenCV measurement,
-segmentation, background jobs, review, or exports.
+Phase 1 does **not** provide marker detection, OpenCV measurement, perspective correction,
+segmentation, AI, dimension or weight calculation, background jobs, progress streams, review,
+approval, exports, or LAN mode.
 
 ## Requirements
 
@@ -47,7 +51,7 @@ The setup script:
 4. Installs frontend packages from `frontend/package-lock.json`.
 5. Creates `.env` from `.env.example` only when missing.
 6. Creates local runtime directories.
-7. Applies the SQLite migration baseline.
+7. Applies all SQLite migrations through the Phase 1 scan schema.
 8. Verifies database readiness.
 
 The script does not require virtual-environment activation and does not change the system execution
@@ -72,14 +76,29 @@ descendants. Cleanup is restricted to the two process trees launched by the scri
 ```
 
 Open <http://127.0.0.1:8000>. FastAPI serves both the API and compiled frontend from the same local
-origin. `/status` is a valid frontend route and supports direct browser navigation. Unknown
+origin. `/scans/new`, `/scans`, `/scans/{id}`, and `/status` support direct browser navigation. Unknown
 `/api/*` paths remain JSON API `404` responses and are never replaced by the SPA shell.
 
-LAN binding is intentionally unavailable in Phase 0.
+LAN binding is intentionally unavailable in Phase 1.
+
+## Phase 1 workflow
+
+1. Open **New Scan** and enter a SKU plus optional barcode and product name.
+2. Choose top, front, and side images. Optional additional images are supported up to the configured
+   per-scan limit. Camera buttons use `capture="environment"` on compatible mobile browsers.
+3. Review the browser-local previews, then create the scan and upload the selected files.
+4. If upload fails, the created scan ID is retained. The page checks the saved scan before retrying,
+   so a lost success response does not resend already-committed required views.
+5. If scan creation itself cannot be confirmed, the form blocks an unsafe automatic retry and links
+   to History so the user can check whether the record exists before starting another.
+6. Open **History** or the scan detail page to inspect status, missing views, and safe image metadata.
+
+Image bytes are not exposed by an API in Phase 1. Previews are available before upload from the
+browser-selected files; persisted scan details intentionally show metadata only.
 
 ## Validation
 
-Run the complete Phase 0 validation suite:
+Run the complete Phase 1 validation suite:
 
 ```powershell
 .\scripts\run_tests.ps1
@@ -91,19 +110,22 @@ Individual commands:
 .\.venv\Scripts\python.exe -m pytest backend\tests
 .\.venv\Scripts\python.exe -m ruff check backend
 .\.venv\Scripts\python.exe -m mypy backend\app
+.\.venv\Scripts\python.exe -m pip check
 
 npm --prefix frontend run lint
 npm --prefix frontend run typecheck
 npm --prefix frontend run test
 npm --prefix frontend run build
+npm --prefix frontend ls --depth=0
 
 .\scripts\smoke_test.ps1
 .\scripts\validate_dev_shutdown.ps1
 ```
 
-The smoke test uses an isolated temporary SQLite database, starts the production server on an
-available loopback port, verifies `/api/health`, `/`, and compiled JavaScript and CSS delivery, then
-terminates the server and removes its temporary files.
+The smoke test uses an isolated temporary SQLite database and data root, starts the production
+server on an available loopback port, verifies health, the SPA shell, compiled JavaScript and CSS,
+scan creation, a three-view upload, scan read, and history, then terminates the server and removes
+its temporary files.
 
 `validate_dev_shutdown.ps1` starts development mode, waits until both endpoints are reachable,
 executes the same targeted cleanup path used after `Ctrl+C`, and confirms that the complete tracked
@@ -128,11 +150,17 @@ Configuration is read from `.env` and environment variables. See `.env.example`.
 |---|---|---|
 | `APP_NAME` | `Local AI SKU Dimensioner` | Display and OpenAPI service name |
 | `APP_ENV` | `development` | `development`, `production`, or `test` |
-| `APP_HOST` | `127.0.0.1` | Loopback-only host in Phase 0 |
+| `APP_HOST` | `127.0.0.1` | Loopback-only host in Phase 1 |
 | `APP_PORT` | `8000` | Backend and production UI port |
 | `LOG_LEVEL` | `INFO` | Local console log level |
 | `DATA_ROOT` | `%LOCALAPPDATA%\LocalAISkuDimensioner` | Database and future runtime artifacts |
 | `DATABASE_URL` | Derived from `DATA_ROOT` | Optional explicit local SQLite URL |
+| `MAX_UPLOAD_MB` | `25` | Maximum bytes per uploaded image, expressed in MiB |
+| `MIN_IMAGE_LONG_EDGE` | `1280` | Minimum decoded long-edge pixels after EXIF orientation |
+| `MIN_IMAGE_SHORT_EDGE` | `720` | Minimum decoded short-edge pixels after EXIF orientation |
+| `MAX_IMAGE_PIXELS` | `60000000` | Maximum decoded pixels accepted per image |
+| `MAX_ADDITIONAL_IMAGES` | `5` | Maximum additional images stored per scan |
+| `MAX_UPLOAD_FILES_PER_REQUEST` | `8` | Maximum multipart images in one request |
 | `VITE_API_BASE_URL` | `/api` | Frontend API prefix |
 
 Runtime data is deliberately outside this OneDrive-hosted repository to avoid synchronizing user
@@ -174,11 +202,12 @@ Browser → FastAPI :8000 ┬→ /api/*  API
                          └→ /*      compiled React application
 ```
 
-Architectural decisions are recorded in `docs/DECISIONS.md`. Project-wide constraints are in
-`AGENTS.md`, and the phase plan is in `PLAN.md`.
+The Phase 1 HTTP contract is documented in `docs/API.md`; frozen cross-layer types are recorded in
+`docs/PHASE_1_CONTRACTS.md`. Architectural decisions are in `docs/DECISIONS.md`. Project-wide
+constraints are in `AGENTS.md`, and the phase plan is in `PLAN.md`.
 
 Backend coverage tooling is configured but is not yet enforced by `run_tests.ps1`; adding a measured
-threshold remains a future Phase 0 quality improvement.
+threshold remains a future quality improvement.
 
 ## Troubleshooting
 
@@ -198,7 +227,7 @@ a permanent execution-policy change.
 ### Port already in use
 
 Development uses ports 8000 and 5173. Stop the conflicting local process. Do not change the host to
-`0.0.0.0`; LAN mode is not part of Phase 0.
+`0.0.0.0`; LAN mode is not part of Phase 1.
 
 ### Health reports database unavailable
 

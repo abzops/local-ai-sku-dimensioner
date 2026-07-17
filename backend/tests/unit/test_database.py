@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from backend.app.database import Database
+from backend.app.database import Database, expected_alembic_head
 
 
 def test_migration_initializes_sqlite(
@@ -12,9 +12,8 @@ def test_migration_initializes_sqlite(
     database = Database(migrated_database_url)
     try:
         database.check_connection()
-        assert database.current_revision() == "0001_phase0"
+        assert database.current_revision() == expected_alembic_head()
     finally:
         database.dispose()
 
     assert (tmp_path / "database" / "test.db").is_file()
-

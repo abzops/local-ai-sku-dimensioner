@@ -9,6 +9,9 @@ from sqlalchemy import engine_from_config, pool
 
 from backend.app.config import get_settings
 from backend.app.database import Base, ensure_sqlite_parent
+from backend.app.models import Scan, ScanImage
+
+_registered_models = (Scan, ScanImage)
 
 config = context.config
 
@@ -56,4 +59,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

@@ -29,14 +29,15 @@ try {
     Invoke-Validation "Backend tests" { & $Python -m pytest backend\tests }
     Invoke-Validation "Backend lint" { & $Python -m ruff check backend }
     Invoke-Validation "Backend type checks" { & $Python -m mypy backend\app }
+    Invoke-Validation "Python dependency consistency" { & $Python -m pip check }
     Invoke-Validation "Frontend lint" { npm --prefix frontend run lint }
     Invoke-Validation "Frontend type checks" { npm --prefix frontend run typecheck }
     Invoke-Validation "Frontend tests" { npm --prefix frontend run test }
     Invoke-Validation "Frontend production build" { npm --prefix frontend run build }
+    Invoke-Validation "Frontend dependency consistency" { npm --prefix frontend ls --depth=0 }
     Invoke-Validation "Production smoke test" { & (Join-Path $PSScriptRoot "smoke_test.ps1") }
 
-    Write-Host "`nAll Phase 0 validation passed." -ForegroundColor Green
+    Write-Host "`nAll Phase 1 validation passed." -ForegroundColor Green
 } finally {
     Pop-Location
 }
-

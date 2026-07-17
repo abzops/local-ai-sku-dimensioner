@@ -37,8 +37,9 @@ data/
 *.sqlite3-shm
 *.sqlite3-wal
 uploads/
+/scans/
 exports/
-models/
+/models/
 logs/
 
 # Editors and operating systems

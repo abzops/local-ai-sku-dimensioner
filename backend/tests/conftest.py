@@ -17,6 +17,12 @@ ISOLATED_SETTINGS_ENVIRONMENT = {
     "DATABASE_URL",
     "FRONTEND_DIST_DIR",
     "LOG_LEVEL",
+    "MAX_ADDITIONAL_IMAGES",
+    "MAX_IMAGE_PIXELS",
+    "MAX_UPLOAD_FILES_PER_REQUEST",
+    "MAX_UPLOAD_MB",
+    "MIN_IMAGE_LONG_EDGE",
+    "MIN_IMAGE_SHORT_EDGE",
 }
 
 
@@ -85,5 +91,11 @@ def app_settings(tmp_path: Path, migrated_database_url: str) -> Iterator[Setting
         data_root=tmp_path,
         database_url=migrated_database_url,
         frontend_dist_dir=tmp_path / "missing-dist",
+        max_upload_mb=1,
+        min_image_long_edge=12,
+        min_image_short_edge=8,
+        max_image_pixels=1_000_000,
+        max_additional_images=5,
+        max_upload_files_per_request=8,
     )
     yield settings

@@ -84,3 +84,70 @@ Development startup records the backend and frontend wrapper processes and disco
 descendants. Shutdown uses Windows' targeted process-tree termination for those roots, validates
 captured process identity before fallback termination, and never searches for or kills unrelated
 Python or Node processes by name.
+
+## D-012 — Keep the Phase 1 scan lifecycle derived and minimal
+
+**Status:** Accepted
+
+The only Phase 1 statuses are `draft`, `images_uploaded`, and `ready_for_processing`. Status is
+derived from persisted image views: no images is draft, any incomplete set is images uploaded, and
+top plus front plus side is ready for later processing. Processing, review, approved, and rejected
+states are not introduced early.
+
+## D-013 — Validate decoded content before storage
+
+**Status:** Accepted
+
+An upload must pass extension and MIME checks, a bounded byte read, full Pillow decode, decoded
+format matching, animated-image rejection, a decoded-pixel ceiling, EXIF-aware orientation, and
+minimum long/short edges. Every file in a request is validated before any request file is written.
+This validation establishes safe image input only; it performs no measurement or correction.
+
+## D-014 — Coordinate SQLite and filesystem changes with owned compensation
+
+**Status:** Accepted
+
+Validated batches are written to a UUID operation directory under the scan's same-volume staging
+area, then moved atomically to its final operation directory immediately before metadata insertion.
+Metadata rows and scan status are committed in one database transaction. Normal failures remove
+only that request's exact staged or finalized operation directory. Existing files are never deleted
+unless the current transaction owns them. A true atomic commit across SQLite and NTFS is not
+available, so abrupt process or power loss can still leave an unreferenced final directory.
+
+## D-015 — Treat client filenames and storage paths as private input
+
+**Status:** Accepted
+
+The client filename is consulted only for its final extension. Image and operation names are
+server-generated UUIDs, storage keys are relative to `DATA_ROOT`, and neither names nor keys are
+present in public Pydantic schemas. Errors use stable codes and safe field/view context without
+paths, filenames, raw exceptions, or stack traces.
+
+## D-016 — Keep Phase 1 images local and private
+
+**Status:** Accepted
+
+Original validated images are stored beneath `%LOCALAPPDATA%\LocalAISkuDimensioner\scans` by
+default. Phase 1 does not provide an image download or thumbnail endpoint. The browser displays
+object-URL previews only for files selected in the current form; persisted details display safe
+metadata.
+
+## D-017 — Retry uploads against the created scan
+
+**Status:** Accepted
+
+The New Scan page creates the scan once and retains its server ID if upload fails. Before presenting
+or completing a retry, it reads the scan to reconcile a success response that may have been lost. If
+scan creation itself has an unknown outcome and no server ID was received, automatic resubmission is
+blocked and the user is directed to History; this avoids creating a second draft on an uncertain
+create result.
+
+## D-018 — Bound multipart files during parsing
+
+**Status:** Accepted
+
+The upload route owns multipart parsing instead of allowing framework parameter injection to spool
+the complete request first. File count and each file's bytes are bounded while the parser receives
+the body, malformed parser failures use the public structured error shape, and parsed temporary
+files are always closed after orchestration. Pillow validation remains the second content-safety
+boundary after parser-level resource limits.
