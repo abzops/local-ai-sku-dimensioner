@@ -8,7 +8,7 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-it("renders the Phase 0 shell without exposing later workflows", async () => {
+it("renders the Phase 1 shell and primary workflow navigation", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
@@ -18,7 +18,7 @@ it("renders the Phase 0 shell without exposing later workflows", async () => {
         status: "ok",
         service: "Local AI SKU Dimensioner",
         version: "0.1.0",
-        database: { status: "ok", revision: "0001_phase0" },
+        database: { status: "ok", revision: "0002_phase1_scans" },
       }),
     }),
   );
@@ -31,10 +31,15 @@ it("renders the Phase 0 shell without exposing later workflows", async () => {
     }),
   ).toBeVisible();
   expect(await screen.findByRole("heading", { name: "Foundation ready" })).toBeVisible();
-  expect(screen.queryByRole("button", { name: /upload/i })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Start a new scan" })).toHaveAttribute(
+    "href",
+    "/scans/new",
+  );
+  expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
+  expect(screen.queryByText(/processing progress/i)).not.toBeInTheDocument();
 });
 
-it("renders the Phase 0 shell at the direct status route", async () => {
+it("preserves the health shell at the direct status route", async () => {
   window.history.replaceState({}, "", "/status");
   vi.stubGlobal(
     "fetch",
@@ -45,7 +50,7 @@ it("renders the Phase 0 shell at the direct status route", async () => {
         status: "ok",
         service: "Local AI SKU Dimensioner",
         version: "0.1.0",
-        database: { status: "ok", revision: "0001_phase0" },
+        database: { status: "ok", revision: "0002_phase1_scans" },
       }),
     }),
   );
@@ -58,4 +63,18 @@ it("renders the Phase 0 shell at the direct status route", async () => {
     }),
   ).toBeVisible();
   expect(await screen.findByRole("heading", { name: "Foundation ready" })).toBeVisible();
+});
+
+it("renders the new scan page at its direct route", () => {
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: vi.fn((file: File) => `blob:${file.name}`),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+  window.history.replaceState({}, "", "/scans/new");
+
+  render(<App />);
+
+  expect(screen.getByRole("heading", { name: "Start a new SKU scan" })).toBeVisible();
+  expect(screen.getByLabelText("Top view from camera")).toHaveAttribute("capture", "environment");
 });

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from backend.app.config import Settings
+from backend.app.database import expected_alembic_head
 from backend.app.main import create_app
 
 DATABASE_UNAVAILABLE_RESPONSE = {
@@ -39,7 +40,7 @@ def test_health_reports_readiness_at_correct_migration_head(app_settings: Settin
         "status": "ok",
         "service": "Local AI SKU Dimensioner",
         "version": "0.1.0",
-        "database": {"status": "ok", "revision": "0001_phase0"},
+        "database": {"status": "ok", "revision": expected_alembic_head()},
     }
 
 
@@ -64,7 +65,7 @@ def test_health_returns_structured_error_for_stale_revision(
     app_settings: Settings,
 ) -> None:
     assert app_settings.database_url is not None
-    replace_database_revision(app_settings.database_url, "0000_pre_phase0")
+    replace_database_revision(app_settings.database_url, "0001_phase0")
     app = create_app(app_settings)
 
     with TestClient(app) as client:
