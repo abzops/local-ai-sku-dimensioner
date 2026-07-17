@@ -14,18 +14,20 @@ export function HomePage() {
         <div className="hero__actions">
           <Link className="button button--primary" to="/scans/new">Start a new scan</Link>
           <Link className="button button--secondary" to="/scans">View history</Link>
+          <Link className="button button--secondary" to="/calibration">Calibrate marker</Link>
         </div>
       </header>
 
       <HealthStatus />
 
       <section className="scope-card" aria-labelledby="scope-heading">
-        <p className="scope-card__index">Phase 1</p>
+        <p className="scope-card__index">Phase 2</p>
         <div>
-          <h2 id="scope-heading">Scan and image intake</h2>
+          <h2 id="scope-heading">Local marker calibration</h2>
           <p>
-            Scan metadata and validated images persist locally. Measurement, marker detection, AI,
-            processing, review, and exports remain intentionally unavailable.
+            Scan intake remains available. You can now create and test a deterministic printed
+            ArUco reference profile. Product measurement, AI, processing, review, and exports remain
+            intentionally unavailable.
           </p>
         </div>
       </section>

@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 
 import { AppNavigation } from "../components/AppNavigation";
+import { CalibrationPage } from "../pages/CalibrationPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { HomePage } from "../pages/HomePage";
 import { NewScanPage } from "../pages/NewScanPage";
@@ -16,6 +17,7 @@ export function AppRoutes() {
         <Route path="/scans/new" element={<NewScanPage />} />
         <Route path="/scans" element={<HistoryPage />} />
         <Route path="/scans/:scanId" element={<ScanDetailPage />} />
+        <Route path="/calibration" element={<CalibrationPage />} />
       </Routes>
     </>
   );

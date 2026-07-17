@@ -25,6 +25,11 @@ $SmokeRoot = [IO.Path]::Combine(
     "local-ai-sku-dimensioner-smoke-$([guid]::NewGuid().ToString('N'))"
 )
 New-Item -ItemType Directory -Path $SmokeRoot -Force | Out-Null
+$FixtureRoot = [IO.Path]::Combine(
+    $TempBase,
+    "local-ai-sku-dimensioner-fixtures-$([guid]::NewGuid().ToString('N'))"
+)
+New-Item -ItemType Directory -Path $FixtureRoot -Force | Out-Null
 
 $Listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
 $Listener.Start()
@@ -41,6 +46,7 @@ $PreviousEnvironment = @{
     DATA_ROOT = $env:DATA_ROOT
     DATABASE_URL = $env:DATABASE_URL
     SMOKE_IMAGE_PATH = $env:SMOKE_IMAGE_PATH
+    SMOKE_CALIBRATION_IMAGE_PATH = $env:SMOKE_CALIBRATION_IMAGE_PATH
 }
 
 try {
@@ -172,7 +178,114 @@ try {
             throw "Phase 1 scan read or history smoke check failed."
         }
 
-        Write-Host "Smoke test passed at http://127.0.0.1:$Port" -ForegroundColor Green
+        $ProfileBody = @{
+            name = "Phase 2 smoke marker"
+            dictionary = "DICT_4X4_50"
+            marker_id = 0
+            marker_size_mm = 100.0
+            minimum_marker_side_px = 64
+            maximum_perspective_ratio = 3.0
+            maximum_homography_condition_number = 1000000.0
+            maximum_marker_edge_residual_px = 2.0
+            rectified_pixels_per_mm = 4.0
+        } | ConvertTo-Json
+        $Profile = Invoke-RestMethod `
+            -Uri "http://127.0.0.1:$Port/api/calibration/profiles" `
+            -Method Post -ContentType "application/json" -Body $ProfileBody -TimeoutSec 5
+        if (-not $Profile.id -or $Profile.is_active) {
+            throw "Phase 2 calibration profile creation smoke check failed."
+        }
+        $Activated = Invoke-RestMethod `
+            -Uri "http://127.0.0.1:$Port/api/calibration/profiles/$($Profile.id)/activate" `
+            -Method Post -TimeoutSec 5
+        if (-not $Activated.is_active) {
+            throw "Phase 2 calibration profile activation smoke check failed."
+        }
+
+        $MarkerDocument = Invoke-WebRequest `
+            -Uri "http://127.0.0.1:$Port/api/calibration/profiles/$($Profile.id)/marker.svg" `
+            -UseBasicParsing -TimeoutSec 5
+        if ($MarkerDocument.StatusCode -ne 200 -or
+            $MarkerDocument.Headers["Content-Type"] -notmatch "^image/svg\+xml" -or
+            $MarkerDocument.Content -notmatch 'width="100mm"' -or
+            $MarkerDocument.Content -notmatch 'height="100mm"') {
+            throw "Phase 2 exact-size marker SVG smoke check failed."
+        }
+
+        $CalibrationImage = Join-Path $FixtureRoot "calibration-marker.png"
+        $env:SMOKE_CALIBRATION_IMAGE_PATH = $CalibrationImage
+        & $Python -c "import os, cv2, numpy as np; canvas=np.full((720,1280),255,np.uint8); marker=cv2.aruco.generateImageMarker(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50),0,360); canvas[180:540,460:820]=marker; assert cv2.imwrite(os.environ['SMOKE_CALIBRATION_IMAGE_PATH'],canvas)"
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $CalibrationImage)) {
+            throw "Unable to create the isolated Phase 2 calibration fixture."
+        }
+        $RuntimeFilesBeforeTest = @(
+            Get-ChildItem -LiteralPath $SmokeRoot -Recurse -File |
+                ForEach-Object FullName |
+                Sort-Object
+        )
+        $CalibrationClient = New-Object System.Net.Http.HttpClient
+        $CalibrationMultipart = New-Object System.Net.Http.MultipartFormDataContent
+        try {
+            $CalibrationBytes = [IO.File]::ReadAllBytes($CalibrationImage)
+            $CalibrationContent = New-Object System.Net.Http.ByteArrayContent -ArgumentList (, $CalibrationBytes)
+            $CalibrationContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("image/png")
+            $CalibrationMultipart.Add($CalibrationContent, "image", "private-client-name.png")
+            $CalibrationResponse = $CalibrationClient.PostAsync(
+                "http://127.0.0.1:$Port/api/calibration/profiles/$($Profile.id)/test",
+                $CalibrationMultipart
+            ).GetAwaiter().GetResult()
+            $CalibrationBody = $CalibrationResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if (-not $CalibrationResponse.IsSuccessStatusCode) {
+                throw "Phase 2 calibration test failed with HTTP $([int]$CalibrationResponse.StatusCode)."
+            }
+            $CalibrationPayload = $CalibrationBody | ConvertFrom-Json
+            if ($CalibrationPayload.marker_id -ne 0 -or
+                $CalibrationPayload.ordered_corners.Count -ne 4 -or
+                -not $CalibrationPayload.marker_edge_quality.valid -or
+                -not $CalibrationPayload.annotated_preview.data_base64 -or
+                -not $CalibrationPayload.rectified_preview.data_base64) {
+                throw "Phase 2 calibration evidence response was incomplete."
+            }
+            if ($CalibrationBody -match "private-client-name" -or
+                $CalibrationBody.Contains($SmokeRoot) -or
+                $CalibrationBody.Contains($FixtureRoot)) {
+                throw "Phase 2 calibration response exposed private input information."
+            }
+        } finally {
+            $CalibrationMultipart.Dispose()
+            $CalibrationClient.Dispose()
+        }
+        $RuntimeFilesAfterTest = @(
+            Get-ChildItem -LiteralPath $SmokeRoot -Recurse -File |
+                ForEach-Object FullName |
+                Sort-Object
+        )
+        if (Compare-Object $RuntimeFilesBeforeTest $RuntimeFilesAfterTest) {
+            throw "The Phase 2 calibration test persisted an unexpected runtime file."
+        }
+
+        $CalibrationPage = Invoke-WebRequest `
+            -Uri "http://127.0.0.1:$Port/calibration" -UseBasicParsing -TimeoutSec 5
+        if ($CalibrationPage.StatusCode -ne 200 -or
+            $CalibrationPage.Content -notmatch '<div id="root"></div>') {
+            throw "Direct production navigation to /calibration did not use the SPA fallback."
+        }
+        $UnknownClient = New-Object System.Net.Http.HttpClient
+        try {
+            $UnknownResponse = $UnknownClient.GetAsync(
+                "http://127.0.0.1:$Port/api/unknown"
+            ).GetAwaiter().GetResult()
+            $UnknownBody = $UnknownResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if ([int]$UnknownResponse.StatusCode -ne 404 -or
+                $UnknownResponse.Content.Headers.ContentType.MediaType -ne "application/json" -or
+                $UnknownBody -notmatch '"detail"') {
+                throw "Unknown API route did not retain its JSON 404 boundary."
+            }
+        } finally {
+            $UnknownClient.Dispose()
+        }
+
+        Write-Host "Phase 2 smoke test passed at http://127.0.0.1:$Port" -ForegroundColor Green
     } finally {
         Pop-Location
     }
@@ -204,5 +317,9 @@ try {
     $ResolvedSmokeRoot = [IO.Path]::GetFullPath($SmokeRoot)
     if ($ResolvedSmokeRoot.StartsWith($TempBase, [StringComparison]::OrdinalIgnoreCase)) {
         Remove-Item -LiteralPath $ResolvedSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $ResolvedFixtureRoot = [IO.Path]::GetFullPath($FixtureRoot)
+    if ($ResolvedFixtureRoot.StartsWith($TempBase, [StringComparison]::OrdinalIgnoreCase)) {
+        Remove-Item -LiteralPath $ResolvedFixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }

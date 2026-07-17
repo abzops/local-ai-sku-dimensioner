@@ -1,0 +1,16 @@
+{
+  "dictionary": "DICT_6X6_50",
+  "marker_id": 49,
+  "marker_side_px": 360,
+  "canvas_width_px": 760,
+  "canvas_height_px": 640,
+  "marker_left_px": 210,
+  "marker_top_px": 130,
+  "marker_size_mm": 90.0,
+  "rectified_pixels_per_mm": 4.0,
+  "expected_orientation_degrees": 0.0,
+  "expected_corner_tolerance_px": 1.0,
+  "expected_residual_min_px": 0.25,
+  "expected_residual_max_px": 0.75
+}
+

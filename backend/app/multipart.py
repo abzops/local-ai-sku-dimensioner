@@ -65,8 +65,13 @@ class BoundedUploadMultiPartParser(MultiPartParser):
             raise
 
 
-async def parse_upload_form(request: Request, settings: Settings) -> FormData:
-    """Return a bounded upload form or a sanitized structured request error."""
+async def _parse_bounded_upload_form(
+    request: Request,
+    settings: Settings,
+    *,
+    max_files: int,
+) -> FormData:
+    """Return a bounded upload form for one explicitly limited endpoint."""
     content_type = request.headers.get("content-type", "")
     content_length = request.headers.get("content-length")
     if content_length is not None:
@@ -75,7 +80,7 @@ async def parse_upload_form(request: Request, settings: Settings) -> FormData:
         except ValueError as error:
             raise _malformed_multipart_error() from error
         maximum_request_bytes = (
-            settings.max_upload_files_per_request
+            max_files
             * (settings.max_upload_bytes + MULTIPART_OVERHEAD_BYTES)
             + MULTIPART_OVERHEAD_BYTES
         )
@@ -96,7 +101,7 @@ async def parse_upload_form(request: Request, settings: Settings) -> FormData:
     parser = BoundedUploadMultiPartParser(
         request.headers,
         request.stream(),
-        max_files=settings.max_upload_files_per_request,
+        max_files=max_files,
         max_file_size_bytes=settings.max_upload_bytes,
     )
     try:
@@ -126,12 +131,26 @@ async def parse_upload_form(request: Request, settings: Settings) -> FormData:
                 recoverable=True,
                 suggested_action=(
                     "Upload no more than "
-                    f"{settings.max_upload_files_per_request} images at once."
+                    f"{max_files} images at once."
                 ),
             ) from error
         raise _malformed_multipart_error() from error
     except Exception as error:
         raise _malformed_multipart_error() from error
+
+
+async def parse_upload_form(request: Request, settings: Settings) -> FormData:
+    """Return the bounded Phase 1 multi-image upload form."""
+    return await _parse_bounded_upload_form(
+        request,
+        settings,
+        max_files=settings.max_upload_files_per_request,
+    )
+
+
+async def parse_single_image_form(request: Request, settings: Settings) -> FormData:
+    """Return a bounded form that can contain at most one calibration image."""
+    return await _parse_bounded_upload_form(request, settings, max_files=1)
 
 
 def _malformed_multipart_error() -> ApplicationError:

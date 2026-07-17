@@ -6,6 +6,15 @@ All notable project changes will be documented in this file.
 
 ### Added
 
+- Phase 2 immutable calibration profiles with transaction-safe single-profile activation.
+- Deterministic exact-size SVG generation for three approved ArUco dictionaries and IDs 0–49.
+- OpenCV marker detection, canonical corners, marker-plane homographies and inverse mapping,
+  rectification, bounded previews, and marker-edge localization evidence.
+- Calibration options, profile, SVG, and in-memory test APIs under `/api/calibration`.
+- Mobile-friendly Calibration page with profile management, marker download, camera capture, retry,
+  and complete marker-only evidence.
+- Focused unit, synthetic, minimal golden, integration, frontend, and production-smoke coverage.
+- Frozen Phase 2 contracts and parallel-agent ownership record.
 - Phase 1 SQLite scan and image metadata schema with create, read, and paginated history APIs.
 - Multipart top, front, side, and optional additional image uploads under `/api/scans/{id}/images`.
 - Pillow-backed extension, MIME, byte-size, content decode, format, animation, pixel-count, and
@@ -20,6 +29,13 @@ All notable project changes will be documented in this file.
 
 ### Changed
 
+- Alembic head advanced from `0002_phase1_scans` to `0003_phase2_calibration_profiles`; health still
+  requires an exact match to the current single head.
+- Python locks now include resolved NumPy 2.4.6 and `opencv-contrib-python-headless` 4.13.0.92.
+- Windows setup verifies NumPy/OpenCV imports, ArUco detector and generator support, and all approved
+  dictionaries after locked installation.
+- Production smoke now covers calibration profile creation/activation, exact-size SVG, marker
+  analysis evidence, ephemeral test behavior, `/calibration` SPA fallback, and API `404` isolation.
 - Alembic head advanced from `0001_phase0` to `0002_phase1_scans`; health still requires an exact
   match to the current single migration head.
 - Production smoke validation now exercises scan creation, a validated three-view upload, read, and
@@ -30,6 +46,11 @@ All notable project changes will be documented in this file.
 
 ### Fixed
 
+- Rectified previews now preserve the reported rectified geometry; an incompressible PNG that
+  exceeds the response ceiling fails through a sanitized structured calibration error instead of
+  being silently resized or causing response validation to return a generic `500`.
+- Calibration evidence and retry state are now bound to the selected profile, cleared on profile
+  changes, and labelled with the producing profile name and ID.
 - Root-level `scans/` runtime data is ignored if `DATA_ROOT` is accidentally configured inside the
   repository.
 - Frontend health fixtures now identify the Phase 1 Alembic head as `0002_phase1_scans`.
@@ -38,6 +59,12 @@ All notable project changes will be documented in this file.
 
 ### Security
 
+- Calibration tests accept exactly one bounded image, reuse the Phase 1 content-validation chain,
+  and keep source bytes and generated previews in memory only.
+- OpenCV failures, filenames, paths, SQL, and internal numeric diagnostics are excluded from public
+  structured errors.
+- Marker previews have explicit dimension and encoded-byte ceilings; generated SVG contains no
+  script or external resource.
 - Client filenames are used only to validate an allowed extension and are never stored or returned.
 - Upload responses and failures omit filesystem paths, filenames, raw exceptions, and stack traces.
 - Image bytes are bounded before decoding; decoded pixels are capped; animated images are rejected.

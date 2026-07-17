@@ -37,7 +37,7 @@ try {
     Invoke-Validation "Frontend dependency consistency" { npm --prefix frontend ls --depth=0 }
     Invoke-Validation "Production smoke test" { & (Join-Path $PSScriptRoot "smoke_test.ps1") }
 
-    Write-Host "`nAll Phase 1 validation passed." -ForegroundColor Green
+    Write-Host "`nAll Phase 2 validation passed." -ForegroundColor Green
 } finally {
     Pop-Location
 }

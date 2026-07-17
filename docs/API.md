@@ -1,4 +1,4 @@
-# Phase 1 API
+# Local API — Phases 0 through 2
 
 All routes are local and use the `/api` prefix. JSON responses never contain a client filename,
 absolute path, relative storage key, raw exception, or stack trace.
@@ -104,3 +104,62 @@ All request files are validated before staging. If any file fails, no file or im
 that request is kept. After staging, required-view and per-scan limits are rechecked; final files and
 metadata are then coordinated with operation-owned compensation for normal failures. Existing files
 from earlier successful requests are not deleted.
+
+## Calibration options and profiles
+
+The Phase 2 calibration routes are local, use `/api/calibration`, and never expose database or
+filesystem details.
+
+- `GET /api/calibration/options` returns the three approved dictionaries, marker ID range 0–49,
+  fixed one-bit border, and profile defaults. It does not require a working database.
+- `POST /api/calibration/profiles` creates an inactive immutable profile and returns `201`.
+- `GET /api/calibration/profiles` returns `{items, total}`, active first and then newest first.
+- `GET /api/calibration/profiles/{profile_id}` returns one profile.
+- `POST /api/calibration/profiles/{profile_id}/activate` switches the single active profile in one
+  transaction.
+
+Profile creation accepts only `name`, `dictionary`, `marker_id`, `marker_size_mm`,
+`minimum_marker_side_px`, `maximum_perspective_ratio`,
+`maximum_homography_condition_number`, `maximum_marker_edge_residual_px`, and
+`rectified_pixels_per_mm`. The accepted dictionaries are `DICT_4X4_50`, `DICT_5X5_50`, and
+`DICT_6X6_50`. There is no update or delete endpoint in Phase 2.
+
+## Exact-size marker SVG
+
+`GET /api/calibration/profiles/{profile_id}/marker.svg` returns deterministic `image/svg+xml` with
+the configured black-square side expressed in `mm`, a square `viewBox`, no script or external
+resource, and a server-generated download name. Print at 100% / actual size with fit-to-page disabled
+and physically verify the black square before use.
+
+## Calibration test
+
+`POST /api/calibration/profiles/{profile_id}/test` accepts `multipart/form-data` with exactly one
+file field named `image`. The file passes the complete Phase 1 upload-validation chain before local
+OpenCV analysis. The image and both previews remain in memory and are not persisted.
+
+A successful response includes:
+
+- profile ID, dictionary, marker ID, and physical marker side;
+- four raw corners in canonical printed-marker order: top-left, top-right, bottom-right, bottom-left;
+- orientation, four edge lengths, and longest/shortest perspective ratio;
+- finite 3 × 3 image-pixel-to-marker-mm and inverse marker-plane matrices;
+- normalized homography condition number and rectified pixel density;
+- `marker_edge_localization_residual` evidence: RMS, maximum, sample count, per-edge RMS, threshold,
+  and `valid: true`;
+- bounded base64 PNG annotated and rectified previews.
+
+The rectified preview dimensions exactly match `rectified_width_px` and `rectified_height_px`. If a
+lossless PNG cannot fit the encoded-size ceiling without changing those dimensions, the request
+fails with a sanitized structured calibration error.
+
+This is marker-plane evidence only. The response contains no product contour or physical product
+dimension. The edge residual is an image-local marker-border localization metric, not certified
+camera reprojection error.
+
+Structured failures include `CALIBRATION_PROFILE_NOT_FOUND`,
+`CALIBRATION_PROFILE_NAME_CONFLICT`, `REFERENCE_NOT_DETECTED`, `REFERENCE_WRONG_ID`,
+`REFERENCE_AMBIGUOUS`, `REFERENCE_CORNERS_INVALID`, `REFERENCE_CROPPED`, `REFERENCE_TOO_SMALL`,
+`EXCESSIVE_PERSPECTIVE`, `HOMOGRAPHY_INVALID`, `HOMOGRAPHY_ILL_CONDITIONED`,
+`REFERENCE_EDGE_EVIDENCE_INSUFFICIENT`, and `REFERENCE_EDGE_RESIDUAL_EXCESSIVE`. Existing safe
+upload and `DATABASE_UNAVAILABLE` errors are reused. No response includes client filenames, local
+paths, SQL, raw OpenCV exceptions, or stack traces.
