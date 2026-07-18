@@ -27,7 +27,9 @@ ISOLATED_SETTINGS_ENVIRONMENT = {
 
 
 def is_settings_environment_name(name: str) -> bool:
-    return name.startswith("APP_") or name in ISOLATED_SETTINGS_ENVIRONMENT
+    return name.startswith(("APP_", "CAPTURE_SETUP_", "MEASUREMENT_")) or (
+        name in ISOLATED_SETTINGS_ENVIRONMENT
+    )
 
 
 INHERITED_SETTINGS_ENVIRONMENT = {

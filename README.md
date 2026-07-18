@@ -1,29 +1,32 @@
 # Local AI SKU Dimensioner
 
-A Windows-first, fully local web application for building image-complete SKU scan records and
-verifying printed ArUco calibration markers. The final product will derive external length, breadth,
-and height from multiple mobile images using deterministic OpenCV geometry. Local AI may later
+A Windows-first, fully local web application for building image-complete SKU scan records,
+verifying printed ArUco calibration markers, and producing experimental deterministic external
+dimensions from a physically qualified orthogonal rig. Local AI may later
 assist segmentation and broad shape classification, but it will not invent authoritative
 measurements.
 
 ## Current scope
 
-Phase 2 provides:
+Phase 3 provides:
 
-- The validated Phase 0 runtime and complete Phase 1 scan/image-upload workflow
-- Immutable SQLite calibration profiles with explicit transaction-safe activation
-- Three approved ArUco dictionaries with marker IDs 0 through 49
-- Deterministic exact-physical-size SVG marker generation
-- Bounded in-memory calibration uploads using all Phase 1 image-safety checks
-- ArUco detection, canonical ordered corners, marker-plane homographies, inverse mapping,
-  rectification, and bounded local previews
-- A marker-edge localization residual with RMS, maximum, sample count, and per-edge evidence
-- A mobile-friendly Calibration page for profiles, marker download, camera capture, and evidence
+- All validated Phase 0, Phase 1, and Phase 2 behavior
+- An explicit local capture-rig contract that is unqualified and disabled by default
+- Immutable, idempotent measurement attempts with processing leases and safe reprocessing links
+- Secure revalidation of the original top, front, and side images without changing their bytes
+- View-specific marker-plane rectification, multi-signal foreground evidence, explicit candidate
+  scoring, oriented geometry, and fixed top/front/side axis mapping
+- Cross-view reconciliation with absolute and relative disagreement gates
+- Conservative engineering uncertainty, engineering-quality evidence, warnings, raw values, and
+  three private annotated previews
+- A mobile-friendly measurement confirmation, immutable history, and result-evidence workflow
 - Unit, synthetic, golden, integration, frontend, smoke, and regression tests
 
-Phase 2 does **not** locate a product or calculate length, breadth, height, volume, or weight. It also
-does not provide segmentation, AI, scan processing, background jobs, progress streams, review,
-approval, exports, or LAN mode. Marker-plane coordinates are calibration evidence only.
+Phase 3 is experimental and is not certified metrology. Physical qualification with known-size
+rigid reference blocks remains incomplete, so no real-world accuracy claim is made. It supports
+only opaque, rigid, stable, approximately cuboidal products captured in the configured qualified
+orthogonal rig. It does **not** include AI segmentation, shape classification, weight or volume,
+background jobs, progress streams, review, approval, exports, or LAN mode.
 
 ## Requirements
 
@@ -54,7 +57,7 @@ The setup script:
 6. Creates local runtime directories.
 7. Verifies NumPy, OpenCV, `cv2.aruco`, `ArucoDetector`, marker generation, and the three approved
    dictionaries.
-8. Applies all SQLite migrations through the Phase 2 calibration-profile schema.
+8. Applies all SQLite migrations through the Phase 3 measurement schema.
 9. Verifies database readiness.
 
 The script does not require virtual-environment activation and does not change the system execution
@@ -79,11 +82,11 @@ descendants. Cleanup is restricted to the two process trees launched by the scri
 ```
 
 Open <http://127.0.0.1:8000>. FastAPI serves both the API and compiled frontend from the same local
-origin. `/scans/new`, `/scans`, `/scans/{id}`, `/calibration`, and `/status` support direct browser
-navigation. Unknown `/api/*` paths remain JSON API `404` responses and are never replaced by the SPA
-shell.
+origin. `/scans/new`, `/scans`, `/scans/{id}`, `/scans/{id}/measurements/{measurementId}`,
+`/calibration`, and `/status` support direct browser navigation. Unknown `/api/*` paths remain JSON
+API `404` responses and are never replaced by the SPA shell.
 
-LAN binding is intentionally unavailable in Phase 2.
+LAN binding is intentionally unavailable in Phase 3.
 
 ## Phase 1 workflow
 
@@ -123,9 +126,35 @@ operator selects another profile. Rectified preview dimensions always match the 
 if a lossless PNG cannot fit the encoded response ceiling, the test fails with a sanitized
 calibration error instead of silently changing the scale.
 
+## Phase 3 measurement workflow
+
+1. Build and physically qualify the orthogonal rig described in
+   `docs/GEOMETRY_CAPTURE_GUIDE.md`. Configure a non-placeholder rig ID and version, its measured
+   uncertainty bounds, and `CAPTURE_SETUP_QUALIFIED=true`. Qualification cannot be replaced by a UI
+   acknowledgement.
+2. Activate the correct marker calibration profile and create a scan with valid top, front, and side
+   images. Each required view must contain exactly one configured marker on that view's valid
+   measurement plane. A floor-plane marker never calibrates height.
+3. Open the scan detail page, choose **Measure scan**, review the capture contract, and explicitly
+   confirm that the opaque rigid cuboid and all three images satisfy it.
+4. The request runs synchronously and processes one view at a time. Heavy decoded and geometry
+   arrays are released before the next view; only bounded evidence and preview bytes are retained.
+   The original image files are revalidated and hashed but are never renamed, normalized,
+   overwritten, or deleted.
+5. Inspect the immutable result: raw per-view axes, reconciled length/width/height, disagreement,
+   conservative uncertainty, engineering quality, warnings, marker/foreground evidence, and the
+   three private annotated previews.
+6. Retrying an uncertain request reuses its request UUID. Explicit reprocessing uses a new UUID and
+   links a new immutable attempt without changing earlier evidence.
+
+Unsupported captures fail safely. This includes freehand images, unknown or unqualified rigs,
+transparent/flexible/highly reflective products, unknown off-plane displacement, invalid marker or
+homography evidence, ambiguous foreground candidates, cropping, insufficient quality, excessive
+uncertainty, and invalid cross-view disagreement.
+
 ## Validation
 
-Run the complete Phase 2 validation suite:
+Run the complete Phase 3 validation suite:
 
 ```powershell
 .\scripts\run_tests.ps1
@@ -155,7 +184,9 @@ scan creation, a three-view upload, scan read, and history, then terminates the 
 its temporary files. It also creates and activates a calibration profile, validates the exact-size
 SVG, analyzes a generated marker, checks marker evidence and previews, verifies direct
 `/calibration` navigation and the JSON API `404` boundary, and confirms the test added no runtime
-file.
+file. Phase 3 smoke coverage also checks the disabled-by-default measurement policy and the direct
+measurement-result SPA route. A qualified synthetic smoke rig is test-only and is not evidence of
+physical accuracy.
 
 `validate_dev_shutdown.ps1` starts development mode, waits until both endpoints are reachable,
 executes the same targeted cleanup path used after `Ctrl+C`, and confirms that the complete tracked
@@ -180,7 +211,7 @@ Configuration is read from `.env` and environment variables. See `.env.example`.
 |---|---|---|
 | `APP_NAME` | `Local AI SKU Dimensioner` | Display and OpenAPI service name |
 | `APP_ENV` | `development` | `development`, `production`, or `test` |
-| `APP_HOST` | `127.0.0.1` | Loopback-only host in Phase 2 |
+| `APP_HOST` | `127.0.0.1` | Loopback-only host in Phase 3 |
 | `APP_PORT` | `8000` | Backend and production UI port |
 | `LOG_LEVEL` | `INFO` | Local console log level |
 | `DATA_ROOT` | `%LOCALAPPDATA%\LocalAISkuDimensioner` | Database and future runtime artifacts |
@@ -191,6 +222,19 @@ Configuration is read from `.env` and environment variables. See `.env.example`.
 | `MAX_IMAGE_PIXELS` | `60000000` | Maximum decoded pixels accepted per image |
 | `MAX_ADDITIONAL_IMAGES` | `5` | Maximum additional images stored per scan |
 | `MAX_UPLOAD_FILES_PER_REQUEST` | `8` | Maximum multipart images in one request |
+| `CAPTURE_SETUP_ID` | `unconfigured` | Safe configured rig identifier; clients cannot choose it |
+| `CAPTURE_SETUP_VERSION` | `unconfigured` | Immutable operator-managed rig version label |
+| `CAPTURE_SETUP_QUALIFIED` | `false` | Explicit physical-qualification gate for measurement |
+| `CAPTURE_SETUP_TYPE` | `orthogonal_rig` | Only supported Phase 3 setup type |
+| `CAPTURE_SETUP_MIN_OBJECT_MM` | `75` | Lower qualified object-axis bound |
+| `CAPTURE_SETUP_MAX_OBJECT_MM` | `400` | Upper qualified object-axis bound |
+| `CAPTURE_SETUP_MARKER_SIZE_UNCERTAINTY_MM` | `0.5` | Conservative marker-size uncertainty |
+| `CAPTURE_SETUP_PLANE_UNCERTAINTY_MM` | `1.0` | Conservative measurement-plane uncertainty |
+| `CAPTURE_SETUP_ORTHOGONALITY_UNCERTAINTY_DEG` | `0.5` | Qualified rig angular uncertainty |
+| `CAPTURE_SETUP_STANDOFF_UNCERTAINTY_MM` | `2.0` | Conservative datum/standoff uncertainty |
+| `CAPTURE_SETUP_MAX_OFF_PLANE_MM` | `0.0` | Qualified maximum off-plane displacement |
+| `MEASUREMENT_PROCESSING_DEADLINE_SECONDS` | `30` | Synchronous processing deadline |
+| `MEASUREMENT_PROCESSING_LEASE_SECONDS` | `120` | Attempt lease duration; must exceed the processing deadline |
 | `VITE_API_BASE_URL` | `/api` | Frontend API prefix |
 
 Runtime data is deliberately outside this OneDrive-hosted repository to avoid synchronizing user
@@ -234,10 +278,10 @@ Browser → FastAPI :8000 ┬→ /api/*  API
                          └→ /*      compiled React application
 ```
 
-The Phase 1 scan contract remains in `docs/PHASE_1_CONTRACTS.md`. Phase 2 routes are documented in
-`docs/API.md`, and frozen calibration types are in `docs/PHASE_2_CONTRACTS.md`. Architectural
-decisions are in `docs/DECISIONS.md`. Project-wide constraints are in `AGENTS.md`, and the phase plan
-is in `PLAN.md`.
+The frozen Phase 1, Phase 2, and Phase 3 contracts are in `docs/PHASE_1_CONTRACTS.md`,
+`docs/PHASE_2_CONTRACTS.md`, and `docs/PHASE_3_CONTRACTS.md`. Routes are documented in
+`docs/API.md`, capture requirements are in `docs/GEOMETRY_CAPTURE_GUIDE.md`, and architectural
+decisions are in `docs/DECISIONS.md`.
 
 Backend coverage tooling is configured but is not yet enforced by `run_tests.ps1`; adding a measured
 threshold remains a future quality improvement.
@@ -260,7 +304,7 @@ a permanent execution-policy change.
 ### Port already in use
 
 Development uses ports 8000 and 5173. Stop the conflicting local process. Do not change the host to
-`0.0.0.0`; LAN mode is not part of Phase 2.
+`0.0.0.0`; LAN mode is not part of Phase 3.
 
 ### Health reports database unavailable
 

@@ -46,6 +46,32 @@ class Settings(BaseSettings):
     max_image_pixels: int = 60_000_000
     max_additional_images: int = 5
     max_upload_files_per_request: int = 8
+    capture_setup_id: str = "unconfigured"
+    capture_setup_version: str = "unconfigured"
+    capture_setup_qualified: bool = False
+    capture_setup_type: Literal["orthogonal_rig"] = "orthogonal_rig"
+    capture_setup_min_object_mm: float = 75.0
+    capture_setup_max_object_mm: float = 400.0
+    capture_setup_marker_size_uncertainty_mm: float = 0.5
+    capture_setup_plane_uncertainty_mm: float = 1.0
+    capture_setup_orthogonality_uncertainty_deg: float = 0.5
+    capture_setup_standoff_uncertainty_mm: float = 2.0
+    capture_setup_max_off_plane_mm: float = 0.0
+    measurement_acceptable_disagreement_mm: float = 5.0
+    measurement_acceptable_disagreement_percent: float = 3.0
+    measurement_warning_disagreement_mm: float = 10.0
+    measurement_warning_disagreement_percent: float = 6.0
+    measurement_usable_quality: float = 0.70
+    measurement_weak_quality: float = 0.55
+    measurement_stronger_source_quality_lead: float = 0.15
+    measurement_weaker_source_uncertainty_ratio: float = 2.0
+    measurement_max_rectified_edge_px: int = 4096
+    measurement_max_rectified_pixels: int = 16_000_000
+    measurement_max_physical_extent_mm: float = 1500.0
+    measurement_max_components: int = 1024
+    measurement_max_candidates: int = 64
+    measurement_processing_deadline_seconds: float = 30.0
+    measurement_processing_lease_seconds: int = 120
 
     @field_validator("app_port")
     @classmethod
@@ -93,6 +119,132 @@ class Settings(BaseSettings):
         if self.max_additional_images > self.max_upload_files_per_request:
             raise ValueError(
                 "MAX_ADDITIONAL_IMAGES cannot exceed MAX_UPLOAD_FILES_PER_REQUEST"
+            )
+        return self
+
+    @field_validator("capture_setup_id")
+    @classmethod
+    def validate_capture_setup_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Capture setup ID cannot be empty")
+        if len(normalized) > 100:
+            raise ValueError("Capture setup ID cannot exceed 100 characters")
+        if any(character in normalized for character in ("/", "\\", "\x00")):
+            raise ValueError("Capture setup ID cannot contain path separators")
+        return normalized
+
+    @field_validator("capture_setup_version")
+    @classmethod
+    def validate_capture_setup_version(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Capture setup version cannot be empty")
+        if len(normalized) > 50:
+            raise ValueError("Capture setup version cannot exceed 50 characters")
+        if any(character in normalized for character in ("/", "\\", "\x00")):
+            raise ValueError("Capture setup version cannot contain path separators")
+        return normalized
+
+    @field_validator(
+        "capture_setup_min_object_mm",
+        "capture_setup_max_object_mm",
+        "measurement_acceptable_disagreement_mm",
+        "measurement_acceptable_disagreement_percent",
+        "measurement_warning_disagreement_mm",
+        "measurement_warning_disagreement_percent",
+        "measurement_max_physical_extent_mm",
+        "measurement_processing_deadline_seconds",
+        "measurement_weaker_source_uncertainty_ratio",
+    )
+    @classmethod
+    def validate_positive_measurement_value(cls, value: float) -> float:
+        if not 0.0 < value <= 1_000_000.0:
+            raise ValueError("Measurement configuration values must be finite and positive")
+        return value
+
+    @field_validator(
+        "capture_setup_marker_size_uncertainty_mm",
+        "capture_setup_plane_uncertainty_mm",
+        "capture_setup_orthogonality_uncertainty_deg",
+        "capture_setup_standoff_uncertainty_mm",
+        "capture_setup_max_off_plane_mm",
+    )
+    @classmethod
+    def validate_non_negative_uncertainty(cls, value: float) -> float:
+        if not 0.0 <= value <= 10_000.0:
+            raise ValueError("Capture uncertainty values must be finite and non-negative")
+        return value
+
+    @field_validator(
+        "measurement_usable_quality",
+        "measurement_weak_quality",
+        "measurement_stronger_source_quality_lead",
+    )
+    @classmethod
+    def validate_quality_threshold(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("Measurement quality thresholds must be between zero and one")
+        return value
+
+    @field_validator(
+        "measurement_max_rectified_edge_px",
+        "measurement_max_rectified_pixels",
+        "measurement_max_components",
+        "measurement_max_candidates",
+        "measurement_processing_lease_seconds",
+    )
+    @classmethod
+    def validate_positive_measurement_integer(cls, value: int) -> int:
+        if not 1 <= value <= 200_000_000:
+            raise ValueError("Measurement resource limits must be positive")
+        return value
+
+    @model_validator(mode="after")
+    def validate_phase3_relationships(self) -> Settings:
+        if self.capture_setup_min_object_mm >= self.capture_setup_max_object_mm:
+            raise ValueError(
+                "CAPTURE_SETUP_MIN_OBJECT_MM must be below CAPTURE_SETUP_MAX_OBJECT_MM"
+            )
+        if self.capture_setup_qualified and (
+            self.capture_setup_id.casefold() == "unconfigured"
+            or self.capture_setup_version.casefold() == "unconfigured"
+        ):
+            raise ValueError(
+                "A qualified capture setup requires an explicit ID and version"
+            )
+        if (
+            self.measurement_acceptable_disagreement_mm
+            > self.measurement_warning_disagreement_mm
+            or self.measurement_acceptable_disagreement_percent
+            > self.measurement_warning_disagreement_percent
+        ):
+            raise ValueError(
+                "Acceptable disagreement thresholds cannot exceed warning thresholds"
+            )
+        if self.measurement_weak_quality > self.measurement_usable_quality:
+            raise ValueError(
+                "MEASUREMENT_WEAK_QUALITY cannot exceed MEASUREMENT_USABLE_QUALITY"
+            )
+        if self.measurement_max_candidates > self.measurement_max_components:
+            raise ValueError(
+                "MEASUREMENT_MAX_CANDIDATES cannot exceed MEASUREMENT_MAX_COMPONENTS"
+            )
+        if (
+            self.measurement_max_rectified_edge_px
+            * self.measurement_max_rectified_edge_px
+            < self.measurement_max_rectified_pixels
+        ):
+            raise ValueError(
+                "MEASUREMENT_MAX_RECTIFIED_PIXELS cannot exceed the square edge ceiling"
+            )
+        if (
+            self.measurement_processing_lease_seconds
+            <= self.measurement_processing_deadline_seconds
+        ):
+            raise ValueError(
+                "MEASUREMENT_PROCESSING_LEASE_SECONDS must exceed "
+                "MEASUREMENT_PROCESSING_DEADLINE_SECONDS"
             )
         return self
 

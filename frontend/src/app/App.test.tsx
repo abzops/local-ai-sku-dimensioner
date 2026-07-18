@@ -2,12 +2,13 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { failedDetailFixture, measurementId, scanId } from "../test/measurementFixtures";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   window.history.replaceState({}, "", "/");
 });
-it("renders the Phase 2 shell and primary workflow navigation", async () => {
+it("renders the Phase 3 shell and primary workflow navigation", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
@@ -17,7 +18,7 @@ it("renders the Phase 2 shell and primary workflow navigation", async () => {
         status: "ok",
         service: "Local AI SKU Dimensioner",
         version: "0.1.0",
-        database: { status: "ok", revision: "0003_phase2_calibration_profiles" },
+        database: { status: "ok", revision: "0004_phase3_measurements" },
       }),
     }),
   );
@@ -50,7 +51,7 @@ it("preserves the health shell at the direct status route", async () => {
         status: "ok",
         service: "Local AI SKU Dimensioner",
         version: "0.1.0",
-        database: { status: "ok", revision: "0003_phase2_calibration_profiles" },
+        database: { status: "ok", revision: "0004_phase3_measurements" },
       }),
     }),
   );
@@ -114,4 +115,21 @@ it("renders the calibration page at its direct route", async () => {
   expect(await screen.findByRole("heading", { name: "Calibrate the printed marker" })).toBeVisible();
   expect(screen.getByLabelText("Profile name *")).toBeVisible();
   expect(screen.getByRole("link", { name: "Calibration" })).toHaveAttribute("aria-current", "page");
+});
+
+it("renders a direct immutable measurement-result route", async () => {
+  window.history.replaceState({}, "", `/scans/${scanId}/measurements/${measurementId}`);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue(failedDetailFixture),
+    }),
+  );
+
+  render(<App />);
+
+  expect(await screen.findByRole("heading", { name: "Measurement evidence" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Measurement failed safely" })).toBeVisible();
 });

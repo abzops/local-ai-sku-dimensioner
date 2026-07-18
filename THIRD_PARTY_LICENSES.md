@@ -12,8 +12,8 @@ release is distributed.
 | SQLAlchemy | Database toolkit | MIT | <https://github.com/sqlalchemy/sqlalchemy> |
 | Alembic | Database migrations | MIT | <https://github.com/sqlalchemy/alembic> |
 | Pillow | Local image decoding and format validation | HPND | <https://github.com/python-pillow/Pillow> |
-| NumPy | Deterministic marker geometry arrays and linear algebra | BSD-3-Clause | <https://github.com/numpy/numpy> |
-| OpenCV contrib, headless Python package | Local ArUco generation, detection, homography, and previews | Apache-2.0 | <https://github.com/opencv/opencv-python> |
+| NumPy | Deterministic marker, foreground, contour, reconciliation, and geometry arrays | BSD-3-Clause | <https://github.com/numpy/numpy> |
+| OpenCV contrib, headless Python package | Local ArUco, rectification, foreground, contour geometry, and previews | Apache-2.0 | <https://github.com/opencv/opencv-python> |
 | python-multipart | Multipart form parsing | Apache-2.0 | <https://github.com/Kludex/python-multipart> |
 | React / React DOM | Web interface | MIT | <https://github.com/facebook/react> |
 | React Router | Client-side routing | MIT | <https://github.com/remix-run/react-router> |
@@ -22,5 +22,5 @@ release is distributed.
 
 ## Local AI models
 
-No AI model or model weights are selected, downloaded, embedded, or distributed in Phase 2. A model
+No AI model or model weights are selected, downloaded, embedded, or distributed in Phase 3. A model
 licence and commercial-use review is required before Phase 4 introduces any model.

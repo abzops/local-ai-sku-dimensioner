@@ -8,8 +8,8 @@ export function HomePage() {
         <p className="eyebrow">Local AI SKU Dimensioner</p>
         <h1>Geometry-first measurement, built for accountable review.</h1>
         <p className="hero__copy">
-          Create a local scan record, capture its required views, and verify that each image is
-          safely stored before later measurement phases begin.
+          Create a local scan, capture three qualified orthogonal views, and inspect deterministic
+          geometry, reconciliation, uncertainty, and annotated evidence without cloud services.
         </p>
         <div className="hero__actions">
           <Link className="button button--primary" to="/scans/new">Start a new scan</Link>
@@ -21,13 +21,14 @@ export function HomePage() {
       <HealthStatus />
 
       <section className="scope-card" aria-labelledby="scope-heading">
-        <p className="scope-card__index">Phase 2</p>
+        <p className="scope-card__index">Phase 3</p>
         <div>
-          <h2 id="scope-heading">Local marker calibration</h2>
+          <h2 id="scope-heading">Experimental geometry-only measurement</h2>
           <p>
-            Scan intake remains available. You can now create and test a deterministic printed
-            ArUco reference profile. Product measurement, AI, processing, review, and exports remain
-            intentionally unavailable.
+            Measurement is disabled by default and supports only an explicitly configured,
+            physically qualified orthogonal rig with opaque rigid cuboids. Results are engineering
+            estimates, not certified metrology. AI segmentation, review, exports, and Phase 4
+            behavior remain intentionally unavailable.
           </p>
         </div>
       </section>
