@@ -215,3 +215,83 @@ The Calibration page displays the producing profile name and ID with every succe
 Changing the selected profile clears prior evidence, errors, and retry state, and stale asynchronous
 results are not rendered for a different profile. Retrying the same image is available only while
 the profile that originated the attempt remains selected.
+
+## D-026 — Gate measurement on one configured qualified rig
+
+**Status:** Accepted
+
+Phase 3 has no capture-setup CRUD and does not accept a client-selected rig. The server owns one
+configured `orthogonal_rig`, defaults it to `unconfigured` and unqualified, requires the request to
+echo its exact safe ID, and snapshots the safe configuration into every attempt. Operator
+acknowledgement is additional evidence and cannot replace physical qualification. A floor marker
+never calibrates vertical height; each view requires a valid view-specific measurement plane.
+
+## D-027 — Keep measurement attempts immutable and idempotent
+
+**Status:** Accepted
+
+Each scan/request UUID pair identifies one canonical immutable attempt. Exact replay returns that
+attempt; changed fields conflict. Processing leases allow safe recovery after a bounded expiry, and
+the lease token is compared when finalizing so a stale worker cannot write. Explicit reprocessing
+creates a linked new attempt rather than changing prior values, evidence, failures, or previews.
+
+## D-028 — Revalidate source images without mutating them
+
+**Status:** Accepted
+
+Only the persisted top, front, and side image records are used. Processing resolves storage beneath
+the configured data root, rejects reparse points and containment violations, rechecks bytes and
+metadata, applies EXIF orientation in memory, hashes original bytes and oriented pixels, and works
+sequentially. It never renames, rewrites, normalizes, or deletes a Phase 1 source image and ignores
+optional additional images.
+
+## D-029 — Separate deterministic view geometry from reconciliation
+
+**Status:** Accepted
+
+Each view independently performs marker-plane rectification, deterministic multi-signal foreground
+extraction, explicit candidate scoring, and oriented geometry. Top supplies length/width, front
+supplies width/height, and side supplies length/height. Reconciliation retains both raw inputs and
+uses both absolute and relative limits; invalid disagreement fails the whole attempt and no result
+is silently averaged outside the acceptable range.
+
+## D-030 — Describe quality and uncertainty as engineering evidence
+
+**Status:** Accepted
+
+Quality combines inspectable marker, homography, background, stability, uniqueness, and visibility
+signals; it is not a probability. Uncertainty is a conservative additive engineering bound derived
+from marker size/localization, raster resolution, foreground stability, and qualified rig terms; it
+is not a statistical confidence interval and does not prove coplanarity or certified accuracy.
+
+## D-031 — Coordinate preview persistence with result finalization
+
+**Status:** Accepted
+
+Three bounded annotated PNGs are staged beneath an operation-owned, same-volume directory and
+atomically renamed into a new attempt-owned directory. Database finalization stores their hashes
+and metadata with the terminal result. A normal failure compensates only files owned by that
+operation. Reads verify attempt ownership, containment, type, size, dimensions, and hash and use
+`Cache-Control: no-store`; storage keys and paths remain private. SQLite and NTFS still cannot form
+one power-loss-atomic transaction.
+
+## D-032 — Keep Phase 3 experimental pending physical qualification
+
+**Status:** Accepted
+
+Synthetic and golden fixtures prove deterministic software behavior, not physical accuracy. Until
+the configured rig is qualified with repeated captures of traceable known-size rigid blocks, Phase
+3 remains experimental and makes no real-world accuracy or certified-metrology claim. The capture
+guide records the required study rather than fabricating measurements.
+
+## D-033 — Fail closed at Phase 3 evidence and resource boundaries
+
+**Status:** Accepted
+
+The adaptive foreground mask is dependent evidence and cannot count toward the required two
+independent signals. Shadow evidence is recorded before filtering, while selected-product clipped
+neutral reflection at or above 5% is unsupported even if geometry variants appear stable. A
+conservative uncertainty bound that reaches its positive dimension fails as
+`MEASUREMENT_UNCERTAINTY_EXCESSIVE`. The configured processing lease must exceed the synchronous
+deadline and is applied to the database claim. Heavy decoded and geometry arrays are retained for
+only one view at a time; reconciliation receives array-free dimension evidence.

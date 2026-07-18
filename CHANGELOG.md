@@ -6,6 +6,21 @@ All notable project changes will be documented in this file.
 
 ### Added
 
+- Phase 3 immutable measurement attempts, source snapshots, preview metadata, request idempotency,
+  processing leases, explicit reprocessing relationships, and Alembic revision
+  `0004_phase3_measurements`.
+- A disabled-by-default configured orthogonal-rig contract with safe options API, qualification
+  gate, physical size range, requirements, and uncertainty snapshot.
+- Secure original-image revalidation, containment and reparse-point guards, original/oriented
+  hashing, sequential view processing, private preview staging, atomic finalization, and
+  operation-owned compensation.
+- Deterministic full-plane rectification, multi-signal foreground evidence, marker exclusion,
+  explicit product-candidate scoring, oriented geometry, fixed per-view axis mapping, conservative
+  uncertainty, and cross-view reconciliation.
+- Measurement options, create/reprocess, history, detail, and private annotated-preview APIs.
+- Scan-detail measurement confirmation/history and direct immutable measurement-evidence pages.
+- Frozen Phase 3 contracts, non-overlapping worktree ownership, capture guide, and unit, synthetic,
+  golden, integration, frontend, smoke, atomicity, concurrency, and security tests.
 - Phase 2 immutable calibration profiles with transaction-safe single-profile activation.
 - Deterministic exact-size SVG generation for three approved ArUco dictionaries and IDs 0–49.
 - OpenCV marker detection, canonical corners, marker-plane homographies and inverse mapping,
@@ -29,6 +44,15 @@ All notable project changes will be documented in this file.
 
 ### Changed
 
+- Capture setup versions now use the frozen 50-character maximum consistently across environment
+  validation, persistence snapshots, public response schemas, and frontend response validation.
+- Measurement outcome recovery now keeps the canonical session request after network failures,
+  malformed successes, and late `500/503` responses; the scan page offers exact-request retry,
+  matching-history reconciliation, and explicit abandon actions.
+- Alembic head advanced from `0003_phase2_calibration_profiles` to
+  `0004_phase3_measurements`; the Phase 0 health contract still requires an exact head match.
+- Production and local validation now cover the Phase 3 options boundary, direct measurement result
+  navigation, persistence, geometry, reconciliation, private previews, and Phase 0-2 regressions.
 - Alembic head advanced from `0002_phase1_scans` to `0003_phase2_calibration_profiles`; health still
   requires an exact match to the current single head.
 - Python locks now include resolved NumPy 2.4.6 and `opencv-contrib-python-headless` 4.13.0.92.
@@ -46,6 +70,23 @@ All notable project changes will be documented in this file.
 
 ### Fixed
 
+- Measurement confirmation now requires fresh capture-contract acknowledgement after close,
+  successful or failed submission, and scan, profile, capture-setup, or reprocess-source changes;
+  stale dialog errors are reset without clearing a separately persisted uncertain request.
+- A successful measurement POST response must carry the submitted request UUID before the frontend
+  clears recovery state, preventing a mismatched response from discarding the canonical request.
+- Phase 3 foreground consensus now counts only independently derived signals; the adaptive mask can
+  refine a candidate but cannot satisfy the two-signal gate by duplicating its inputs.
+- Shadow evidence now records the fraction removed before filtering, and selected-product glare at
+  or above the unsupported reflection boundary fails with a structured error even when variants
+  happen to remain stable.
+- A conservative uncertainty that reaches a contributing raw dimension or reconciled value now
+  fails immutably as `MEASUREMENT_UNCERTAINTY_EXCESSIVE` instead of returning a dimension or being
+  rewritten as generic disagreement.
+- The configured processing lease is passed into attempt claiming, configuration rejects leases
+  that do not exceed the total deadline, and heavy per-view arrays are released before the next
+  source is decoded.
+
 - Rectified previews now preserve the reported rectified geometry; an incompressible PNG that
   exceeds the response ceiling fails through a sanitized structured calibration error instead of
   being silently resized or causing response validation to return a generic `500`.
@@ -59,6 +100,12 @@ All notable project changes will be documented in this file.
 
 ### Security
 
+- Measurement is rejected unless the server-configured rig is explicitly qualified and the client
+  echoes the configured ID; arbitrary client capture-setup IDs are not accepted.
+- Original scan images are resolved beneath the configured data root, reparse points and content
+  changes are rejected, and successful or failed processing never mutates source image bytes.
+- Private previews are attempt-owned, hash-checked, PNG-bounded, served with `no-store`, and never
+  disclose storage keys or paths.
 - Calibration tests accept exactly one bounded image, reuse the Phase 1 content-validation chain,
   and keep source bytes and generated previews in memory only.
 - OpenCV failures, filenames, paths, SQL, and internal numeric diagnostics are excluded from public

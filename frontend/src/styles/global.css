@@ -653,6 +653,73 @@ fieldset:disabled .button {
   background: rgb(255 251 240 / 70%);
 }
 
+.dialog-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  overflow-y: auto;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(18 30 22 / 68%);
+}
+
+.dialog-backdrop > [role="dialog"] {
+  width: min(100%, 42rem);
+  max-height: calc(100vh - 2rem);
+  margin: 0;
+  overflow-y: auto;
+  background: #fffffc;
+}
+
+.dialog-backdrop label {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  margin: 1rem 0;
+  line-height: 1.5;
+}
+
+.dialog-backdrop input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.2rem;
+}
+
+details.detail-card summary {
+  font-weight: 750;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+details.detail-card[open] summary {
+  margin-bottom: 1rem;
+}
+
+#previews + .detail-card,
+#previews ~ .detail-card {
+  display: inline-grid;
+  width: min(100%, 32rem);
+  margin-right: 1rem;
+  vertical-align: top;
+}
+
+#previews ~ .detail-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.65rem;
+  background: #e6eae3;
+}
+
+#previews ~ .detail-card figcaption {
+  margin-top: 0.65rem;
+  color: #58635c;
+  overflow-wrap: anywhere;
+  text-transform: capitalize;
+}
+
 .calibration-page,
 .calibration-page * {
   min-width: 0;

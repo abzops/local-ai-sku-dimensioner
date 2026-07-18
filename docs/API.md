@@ -1,4 +1,4 @@
-# Local API — Phases 0 through 2
+# Local API — Phases 0 through 3
 
 All routes are local and use the `/api` prefix. JSON responses never contain a client filename,
 absolute path, relative storage key, raw exception, or stack trace.
@@ -163,3 +163,81 @@ Structured failures include `CALIBRATION_PROFILE_NOT_FOUND`,
 `REFERENCE_EDGE_EVIDENCE_INSUFFICIENT`, and `REFERENCE_EDGE_RESIDUAL_EXCESSIVE`. Existing safe
 upload and `DATABASE_UNAVAILABLE` errors are reused. No response includes client filenames, local
 paths, SQL, raw OpenCV exceptions, or stack traces.
+
+## Measurement options
+
+`GET /api/measurements/options` is database-independent and returns only safe configured policy:
+
+- configured capture-setup ID, version, `orthogonal_rig` type, qualification state, and whether
+  processing is enabled;
+- the qualified object-size range, initial supported product domain, and physical requirements;
+- required view order `top`, `front`, `side` and the fixed dimension-axis mapping;
+- acceptable and warning disagreement thresholds; and
+- the non-certified-metrology warning.
+
+The default capture setup is `unconfigured` and unqualified, so processing is disabled. Clients
+cannot create or select an arbitrary capture setup in Phase 3.
+
+## Create or explicitly reprocess a measurement
+
+`POST /api/scans/{scan_id}/measurements`
+
+```json
+{
+  "request_id": "client UUID v4",
+  "expected_calibration_profile_id": "active profile UUID",
+  "expected_capture_setup_id": "configured server rig ID",
+  "capture_contract_acknowledged": true,
+  "reprocess_of_measurement_id": null
+}
+```
+
+The operation is synchronous. A new request returns `201`; a replay of the same canonical request
+returns the existing immutable attempt with `200`. `(scan_id, request_id)` is unique. Reusing the
+request ID with changed fields returns `MEASUREMENT_REQUEST_CONFLICT`. Explicit reprocessing uses
+this same endpoint with a new request UUID and the earlier attempt ID; it never overwrites the prior
+result.
+
+Processing is rejected before a claim when the scan is not ready, the capture setup is unqualified
+or mismatched, no active profile exists, the expected profile is not active, acknowledgement is
+missing, or the referenced reprocessing attempt does not belong to the scan. A claimed attempt is
+persisted as `processing` and transitions once to `succeeded` or `failed`. Safe processing failures
+are persisted as immutable failed attempts. An active non-expired lease is returned as processing;
+an expired lease can be reclaimed atomically, and the stale worker cannot finalize it. The server
+applies the configured lease to every claim and refuses startup configuration where that lease does
+not exceed the synchronous processing deadline.
+
+## Measurement history and evidence
+
+- `GET /api/scans/{scan_id}/measurements?offset=0&limit=50` returns reverse-chronological immutable
+  summaries.
+- `GET /api/scans/{scan_id}/measurements/{measurement_id}` returns one processing, succeeded, or
+  failed attempt.
+
+A successful detail contains the frozen profile, capture-setup, and policy snapshots; source image
+metadata and hashes; canonical top/front/side evidence; raw values for both contributing views;
+reconciled length, width, and height; absolute and relative disagreement; reconciliation rule;
+validation status; conservative uncertainty; engineering quality; warnings; and three preview
+descriptors. Private source and preview storage keys are never public.
+
+Staleness is computed on reads without changing the original result. Safe reasons include changed
+active calibration profile, required source images, capture setup, processing version, algorithm
+version, or measurement policy.
+
+## Private measurement previews
+
+`GET /api/scans/{scan_id}/measurements/{measurement_id}/previews/{view}` accepts only `top`,
+`front`, or `side`. It returns the attempt-owned annotated `image/png` only for a succeeded attempt
+after containment, ownership, media type, byte count, dimensions, and SHA-256 checks. Responses use
+`Cache-Control: no-store`. A missing, changed, misplaced, or mismatched preview fails with a safe
+structured response and never reveals the path or storage key.
+
+## Measurement error boundary
+
+Measurement failures use the existing structured shape: `code`, `message`, `recoverable`,
+`suggested_action`, and optional safe `field`/`view`. The allowlisted Phase 3 codes and exact success
+schemas are frozen in `docs/PHASE_3_CONTRACTS.md`. No measurement response exposes client
+filenames, local paths, storage keys, SQL, tracebacks, OpenCV/Pillow exceptions, or internal model
+data. A conservative uncertainty bound that reaches the associated positive dimension persists the
+stable `MEASUREMENT_UNCERTAINTY_EXCESSIVE` failure. Phase 3 contains no AI model, queue, progress
+stream, review, export, or LAN API.

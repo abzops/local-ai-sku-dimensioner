@@ -2,94 +2,124 @@
 
 ## Active phase
 
-Phase 2 — Reference marker and calibration engine
+Phase 3 - Geometry-only product measurement
 
 ## State
 
-Implemented, independently reviewed, corrected, and validated on 2026-07-18. The reviewer reported
-no blockers and two major findings; both major findings now have regression coverage and are fixed.
-No commit or push has been created for the Phase 2 branch.
+Implemented, independently reviewed, corrected, and fully validated on branch
+`codex/phase-3-geometry` on 2026-07-19. Phase 3 remains experimental because physical rig
+qualification with known-size rigid reference blocks has not been completed. Nothing has been
+committed or pushed.
 
 ## Implemented scope
 
-- OpenCV contrib headless 4.13.0.92 and NumPy 2.4.6 resolved through the Python 3.11 lock workflow
-- Setup verification for NumPy/OpenCV imports, `cv2.aruco`, `ArucoDetector`, marker generation, and
-  `DICT_4X4_50`, `DICT_5X5_50`, and `DICT_6X6_50`
-- Immutable SQLite calibration profiles through Alembic revision
-  `0003_phase2_calibration_profiles`
-- Explicit transaction-safe activation with one commit and a partial unique active-profile index
-- Deterministic exact-size SVG markers for approved dictionaries and IDs 0 through 49
-- Exactly-one-file calibration test uploads using existing Phase 1 extension, MIME, byte-size,
-  decoded-format, animation, pixel-count, EXIF-orientation, and resolution validation
-- Configured-marker detection, canonical ordered corners, marker-plane homography and inverse,
-  normalized conditioning, and marker-only perspective rectification
-- Marker-edge localization evidence with RMS, maximum, sample count, per-edge RMS, and threshold
-- Bounded in-memory annotated and rectified PNG previews with no source/preview persistence
-- Rectified preview dimensions preserved exactly, with safe structured failure when a lossless PNG
-  cannot fit the encoded response ceiling
-- Structured calibration failures without filenames, local paths, SQL, stack traces, or raw OpenCV
-  exceptions
-- Calibration options/profile/SVG/test APIs under `/api/calibration`
-- Mobile-friendly Calibration page with profile creation/list/read/activation, SVG preview/download,
-  print guidance, camera input, profile-bound retry, strict response validation, and complete
-  profile-labelled evidence display
-- Phase 0 and Phase 1 API, upload, health, production serving, and Windows shutdown behavior preserved
+- All validated Phase 0 runtime/health/SPA behavior, Phase 1 scan/upload behavior, and Phase 2
+  calibration behavior remain present.
+- Alembic revision `0004_phase3_measurements` adds immutable measurement attempts, source snapshots,
+  and private preview metadata without changing `ScanStatus`.
+- One server-configured `orthogonal_rig` contract is unqualified and disabled by default. Clients
+  must echo its exact safe ID; they cannot create or select capture setups.
+- Safe `GET /api/measurements/options` exposes only qualification state, supported product domain,
+  required views, fixed view-axis mapping, size range, disagreement policy, requirements, and the
+  non-certified-metrology warning.
+- Measurement create/reprocess, paginated history, immutable detail, and private annotated-preview
+  APIs are available under `/api`.
+- `(scan_id, request_id)` idempotency, canonical request signatures, expiring processing leases,
+  stale-worker compare-and-set rejection, linked explicit reprocessing, and terminal immutability
+  are enforced.
+- Original top/front/side images are resolved beneath `DATA_ROOT`, checked for reparse points and
+  containment, revalidated against stored metadata, decoded with EXIF orientation in memory, and
+  hashed before sequential processing. Original files are never changed.
+- Each view independently performs configured ArUco detection, full valid-plane rectification,
+  marker exclusion, background sampling, independent multi-signal foreground consensus,
+  morphology, connected components, explicit candidate scoring, oriented contour geometry,
+  shadow/reflection rejection, quality evidence, and conservative uncertainty. Heavy arrays are
+  released before the next view is decoded.
+- Fixed mapping is top length/width, front width/height, and side length/height. Final length uses
+  top/side, width uses top/front, and height uses front/side.
+- Reconciliation requires both absolute and relative acceptable limits, permits only the frozen
+  warning-range stronger-source rule, and fails the attempt for invalid disagreement, excessive
+  uncertainty, or any invalid required view.
+- Successful attempts retain all raw view evidence, final dimensions, disagreement, reconciliation
+  rule, quality, uncertainty, warnings, and three bounded private annotated PNGs.
+- Preview staging/finalization is same-volume and operation-owned; database failure triggers safe
+  compensation, and reads recheck ownership, containment, PNG metadata, size, dimensions, and hash.
+- The React UI provides qualification-aware measurement confirmation, immutable attempt history,
+  explicit reprocessing, synchronous waiting/failure states, direct evidence routes, uncertainty,
+  warnings, reconciliation evidence, per-view details, and local previews without fake progress.
+- Capture setup versions are consistently bounded to 50 characters across configuration,
+  persistence snapshots, public schemas, API response validation, and frontend validation.
+- Measurement POST network failures, malformed successes, and late `500/503` responses preserve
+  the canonical session request. The scan page can retry the identical UUID, reconcile it against
+  refreshed attempt history, or abandon it explicitly without silently creating a new request.
+- Measurement confirmation always resets acknowledgement and stale errors after close, completion,
+  failure/reopen, or any scan, profile, capture-setup, or reprocess-source change. Closing the dialog
+  does not discard a separately persisted uncertain request.
+- Frozen contracts and ownership are recorded in `docs/PHASE_3_CONTRACTS.md` and
+  `docs/PHASE_3_OWNERSHIP.md`; physical requirements are in `docs/GEOMETRY_CAPTURE_GUIDE.md`.
 
 ## Explicitly not implemented
 
-- Product contours, product segmentation, or length, breadth, height, volume, weight, or confidence
-- Applying marker-plane coordinates to a product
-- AI models, SAM, YOLO, shape classification, or model downloads
-- Scan processing, background jobs, WebSocket/SSE progress, review, approval, or rejection
-- Exports, LAN mode, paid APIs, cloud services, or any Phase 3 behavior
+- AI segmentation, SAM, YOLO, neural inference, model weights, or automatic shape classification
+- Weight, volume, density, or certified-metrology calculations
+- Background workers, queues, processing jobs, WebSocket/SSE progress, or fake stage percentages
+- Review, approval, rejection, manual measurement editing, exports, or LAN mode
+- Phase 4 or later functionality
 
-## Automated validation results
+## Validation status
 
-- Windows setup: passed with PowerShell 5.1, Python 3.11.9, Node.js 22.22.2, NumPy 2.4.6, OpenCV
-  4.13.0, and Alembic head `0003_phase2_calibration_profiles`.
-- Backend: 149 tests passed; one upstream Starlette/httpx deprecation warning remains.
+- Integrated backend suite: 257 tests passed with one upstream Starlette/httpx deprecation warning.
 - Ruff: passed with no findings.
-- mypy strict checks: passed across 44 application source files.
-- Python dependency consistency: passed.
+- mypy strict checks: passed across 59 application source files.
+- Python dependency consistency: passed with no broken requirements.
 - Frontend ESLint and TypeScript checks: passed.
-- Frontend Vitest: 9 files and 41 tests passed.
-- Frontend production build: passed with 105 transformed modules.
-- Frontend dependency consistency: passed.
-- Production smoke: passed for Phase 0/1 behavior plus profile create/activate, SVG, marker analysis,
-  bounded evidence/previews, ephemeral test behavior, `/calibration`, and API `404` isolation.
-- Development shutdown: backend/frontend process trees stopped and ports 8000/5173 were released.
-- `scripts/run_tests.ps1`: passed.
-- `git diff --check`: passed; Git reported only expected Windows line-ending conversion warnings.
-- Independent read-only review: no blockers, two majors fixed, and two minor findings deferred.
-- Manual production validation: profile creation/activation, SVG rendering/download, valid marker
-  evidence, wrong-ID and ambiguous-marker errors, non-persistence, direct `/calibration`, console,
-  mobile overflow, API `404`, and port release checks passed. The in-app browser file-chooser bridge
-  timed out, so its native picker interaction was covered by frontend tests while the same runtime
-  image requests and responses were validated directly against the local API.
+- Frontend Vitest: 14 files and 72 tests passed.
+- Frontend production build: passed with 111 transformed modules.
+- Phase 3 production smoke: passed for migrations, Phase 0-2 regressions, a qualified synthetic
+  three-view measurement, replay, explicit reprocessing, immutable earlier evidence, all three
+  private previews, source-file immutability, direct result routing, and JSON API 404 isolation.
+- `setup_windows.ps1`: passed with Python 3.11.9, Node.js 22.22.2, NumPy 2.4.6, OpenCV 4.13.0,
+  ArUco support, and Alembic head `0004_phase3_measurements`.
+- Complete `run_tests.ps1`: passed, including backend, frontend, dependency, build, and production
+  smoke validation.
+- Development shutdown validation: passed; backend/frontend process trees ended and ports 8000 and
+  5173 were released.
+- Production/manual validation: direct `/scans`, `/scans/new`, `/calibration`, and measurement
+  routes rendered; `/api/unknown` returned JSON `404`; the browser console was clean; the 390x844
+  viewport had no horizontal overflow; and no listeners remained afterward.
+- Final recovery validation used a local temporary late-response proxy outside the repository. Two
+  byte-identical POST bodies reused request UUID `04e38eaf-b7bc-4d87-bba8-85709e26244b`; backend
+  responses were initial `201` then idempotent `200`, history contained exactly one succeeded
+  attempt, refresh removed the pending-recovery panel, and explicit reprocessing reopened without
+  acknowledgement. Temporary validation processes were stopped and runtime data was moved to the
+  Recycle Bin afterward.
+- Independent read-only review: no blockers, five major findings corrected with regressions, and
+  the three final low-risk findings corrected with focused regressions.
+
+## Physical qualification status
+
+Incomplete. Synthetic and golden tests validate deterministic software behavior only. No real-world
+accuracy result is claimed. Before operational use, the configured rig must be qualified using
+repeated captures of known-size rigid reference blocks and independent ground-truth measurements as
+described in `docs/GEOMETRY_CAPTURE_GUIDE.md`.
 
 ## Known limitations
 
-- Browser/printer settings can change physical output scale. Software provides exact SVG millimetre
-  attributes and instructions, but the operator must verify the printed black square with a ruler.
-- Phase 2 uses planar marker homography and does not estimate camera intrinsics or lens distortion.
-- The marker-edge residual is an image-local border-localization signal, not certified camera
-  reprojection error or metrology accuracy.
-- Test fixtures are deterministic synthetic/generated markers; controlled real-camera and physical
-  printed-marker validation is still required before measurement work.
-- The current golden regression regenerates its marker input through the locked OpenCV generator;
-  it is deterministic but is not an independently stored binary camera-image golden.
-- Frontend unknown-response validation checks the complete structural contract but does not decode
-  PNG signatures/byte ceilings or fully parse UUID/timestamp semantics; the backend remains the
-  authoritative strict contract boundary.
-- Calibration tests intentionally return base64 previews in one response; dimensions and encoded
-  bytes are bounded, but the response is not a streaming interface.
-- Existing Phase 1 SQLite/filesystem power-loss, explicit fsync, and content re-hashing limitations
-  remain unchanged.
-- Backend coverage tooling exists, but no coverage threshold is enforced.
-- FastAPI's current `TestClient` compatibility layer emits one upstream deprecation warning.
+- A homography validates a numerical reference-plane mapping; software cannot independently prove
+  that the product face, marker, and rig datum are physically coplanar.
+- Phase 3 does not estimate camera intrinsics or correct lens distortion.
+- Initial support is limited to opaque, rigid, stable, approximately cuboidal products with mild or
+  no reflections, complete visibility, known plane registration, and axes within 75-400 mm by
+  default.
+- Quality values are engineering evidence, not probabilities. Uncertainty is a conservative
+  additive engineering bound, not a statistical confidence interval.
+- SQLite and NTFS cannot form one power-loss-atomic transaction. Operation-owned compensation
+  handles normal failures, but abrupt power loss can leave an unreferenced preview directory.
+- Explicit `fsync`, cryptographic source re-hashing after a successful immutable attempt, and a
+  backend coverage threshold remain future hardening work.
+- The FastAPI `TestClient` compatibility layer emits one upstream deprecation warning.
 - Setup has been validated on the current Windows 11 machine, not a second clean workstation.
 
 ## Next gate
 
-Wait for user approval before committing or pushing Phase 2. Do not begin Phase 3 without separate
-explicit approval.
+Wait for user approval before committing or pushing. Do not begin Phase 4.

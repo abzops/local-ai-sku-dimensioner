@@ -1,0 +1,77 @@
+{
+  "files": {
+    "ambiguous_top.png": {
+      "ambiguous": true,
+      "expected_dimensions_mm": {
+        "length": 240.0,
+        "width": 140.0
+      },
+      "perspective": false,
+      "sha256": "570e466eb622ad7df1d85a60078b9296df4934bd49a20a58a4b8dcc9e9b99f64",
+      "view": "top"
+    },
+    "nominal_front.png": {
+      "ambiguous": false,
+      "expected_dimensions_mm": {
+        "height": 120.0,
+        "width": 140.0
+      },
+      "perspective": false,
+      "sha256": "441c5a85c3cdc09d5a44d1e186cea6ed9f27ceac71155f7598708f76887bd350",
+      "view": "front"
+    },
+    "nominal_side.png": {
+      "ambiguous": false,
+      "expected_dimensions_mm": {
+        "height": 120.0,
+        "length": 240.0
+      },
+      "perspective": false,
+      "sha256": "cf88b63068e171e80bf0e21ea6d4327c016c7359fd4d2ed7ce4105ec730b160c",
+      "view": "side"
+    },
+    "nominal_top.png": {
+      "ambiguous": false,
+      "expected_dimensions_mm": {
+        "length": 240.0,
+        "width": 140.0
+      },
+      "perspective": false,
+      "sha256": "9e57147967e0b702461bda27e5fdd5fd0830262f0b238a671f93b5b6ef2cb737",
+      "view": "top"
+    },
+    "perspective_front.png": {
+      "ambiguous": false,
+      "expected_dimensions_mm": {
+        "height": 120.0,
+        "width": 140.0
+      },
+      "perspective": true,
+      "sha256": "e26359042b53b9d8421b9160397cffbd9f54a205d82fb6558c2fa7376a49ac8d",
+      "view": "front"
+    },
+    "perspective_side.png": {
+      "ambiguous": false,
+      "expected_dimensions_mm": {
+        "height": 120.0,
+        "length": 240.0
+      },
+      "perspective": true,
+      "sha256": "4c656d44ed033cd1a10f074277ea92a0fc9bc047497fc48c0643b3dbec796a09",
+      "view": "side"
+    },
+    "perspective_top.png": {
+      "ambiguous": false,
+      "expected_dimensions_mm": {
+        "length": 240.0,
+        "width": 140.0
+      },
+      "perspective": true,
+      "sha256": "50708a812ce919bae37fbaf4f0bcad529b2883f233f069f708a8e2f22df77f80",
+      "view": "top"
+    }
+  },
+  "generator": "backend/tests/fixtures/generate_phase3_golden.py",
+  "opencv_version": "4.13.0",
+  "physical_plane": "marker and product silhouette are generated in one plane"
+}

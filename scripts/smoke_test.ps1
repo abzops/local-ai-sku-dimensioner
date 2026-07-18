@@ -45,7 +45,22 @@ $PreviousEnvironment = @{
     APP_PORT = $env:APP_PORT
     DATA_ROOT = $env:DATA_ROOT
     DATABASE_URL = $env:DATABASE_URL
+    MIN_IMAGE_LONG_EDGE = $env:MIN_IMAGE_LONG_EDGE
+    MIN_IMAGE_SHORT_EDGE = $env:MIN_IMAGE_SHORT_EDGE
+    CAPTURE_SETUP_ID = $env:CAPTURE_SETUP_ID
+    CAPTURE_SETUP_VERSION = $env:CAPTURE_SETUP_VERSION
+    CAPTURE_SETUP_QUALIFIED = $env:CAPTURE_SETUP_QUALIFIED
+    CAPTURE_SETUP_TYPE = $env:CAPTURE_SETUP_TYPE
+    CAPTURE_SETUP_MIN_OBJECT_MM = $env:CAPTURE_SETUP_MIN_OBJECT_MM
+    CAPTURE_SETUP_MAX_OBJECT_MM = $env:CAPTURE_SETUP_MAX_OBJECT_MM
+    CAPTURE_SETUP_MARKER_SIZE_UNCERTAINTY_MM = $env:CAPTURE_SETUP_MARKER_SIZE_UNCERTAINTY_MM
+    CAPTURE_SETUP_PLANE_UNCERTAINTY_MM = $env:CAPTURE_SETUP_PLANE_UNCERTAINTY_MM
+    CAPTURE_SETUP_ORTHOGONALITY_UNCERTAINTY_DEG = $env:CAPTURE_SETUP_ORTHOGONALITY_UNCERTAINTY_DEG
+    CAPTURE_SETUP_STANDOFF_UNCERTAINTY_MM = $env:CAPTURE_SETUP_STANDOFF_UNCERTAINTY_MM
+    CAPTURE_SETUP_MAX_OFF_PLANE_MM = $env:CAPTURE_SETUP_MAX_OFF_PLANE_MM
+    MEASUREMENT_PROCESSING_DEADLINE_SECONDS = $env:MEASUREMENT_PROCESSING_DEADLINE_SECONDS
     SMOKE_IMAGE_PATH = $env:SMOKE_IMAGE_PATH
+    SMOKE_IMAGE_ROOT = $env:SMOKE_IMAGE_ROOT
     SMOKE_CALIBRATION_IMAGE_PATH = $env:SMOKE_CALIBRATION_IMAGE_PATH
 }
 
@@ -54,6 +69,20 @@ try {
     $env:APP_HOST = "127.0.0.1"
     $env:APP_PORT = [string]$Port
     $env:DATA_ROOT = $SmokeRoot
+    $env:MIN_IMAGE_LONG_EDGE = "800"
+    $env:MIN_IMAGE_SHORT_EDGE = "600"
+    $env:CAPTURE_SETUP_ID = "phase3-smoke-rig"
+    $env:CAPTURE_SETUP_VERSION = "1"
+    $env:CAPTURE_SETUP_QUALIFIED = "true"
+    $env:CAPTURE_SETUP_TYPE = "orthogonal_rig"
+    $env:CAPTURE_SETUP_MIN_OBJECT_MM = "75"
+    $env:CAPTURE_SETUP_MAX_OBJECT_MM = "400"
+    $env:CAPTURE_SETUP_MARKER_SIZE_UNCERTAINTY_MM = "0.2"
+    $env:CAPTURE_SETUP_PLANE_UNCERTAINTY_MM = "0.5"
+    $env:CAPTURE_SETUP_ORTHOGONALITY_UNCERTAINTY_DEG = "0.2"
+    $env:CAPTURE_SETUP_STANDOFF_UNCERTAINTY_MM = "0.4"
+    $env:CAPTURE_SETUP_MAX_OFF_PLANE_MM = "0.5"
+    $env:MEASUREMENT_PROCESSING_DEADLINE_SECONDS = "60"
     Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
 
     Push-Location $RepositoryRoot
@@ -131,11 +160,17 @@ try {
             throw "Phase 1 scan creation smoke check failed."
         }
 
-        $SmokeImage = Join-Path $SmokeRoot "smoke-source.png"
-        $env:SMOKE_IMAGE_PATH = $SmokeImage
-        & $Python -c "import os; from PIL import Image; Image.new('RGB', (1280, 720), (38, 118, 184)).save(os.environ['SMOKE_IMAGE_PATH'], 'PNG')"
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $SmokeImage)) {
-            throw "Unable to create the isolated smoke-test image."
+        $SmokeImages = @{}
+        $env:SMOKE_IMAGE_ROOT = $FixtureRoot
+        & $Python -c "import os, cv2; from pathlib import Path; from backend.app.contracts import ImageView; from backend.tests.fixtures.phase3_synthetic_factory import render_scene; root=Path(os.environ['SMOKE_IMAGE_ROOT']); [(cv2.imwrite(str(root / f'{view.value}.png'), render_scene(view).image_bgr) or (_ for _ in ()).throw(RuntimeError('encode failed'))) for view in (ImageView.TOP, ImageView.FRONT, ImageView.SIDE)]"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to create isolated Phase 3 smoke images."
+        }
+        foreach ($View in @("top", "front", "side")) {
+            $SmokeImages[$View] = Join-Path $FixtureRoot "$View.png"
+            if (-not (Test-Path -LiteralPath $SmokeImages[$View])) {
+                throw "A required isolated Phase 3 smoke image is missing."
+            }
         }
 
         Add-Type -AssemblyName System.Net.Http
@@ -143,7 +178,7 @@ try {
         $Multipart = New-Object System.Net.Http.MultipartFormDataContent
         try {
             foreach ($View in @("top", "front", "side")) {
-                $ImageContent = New-Object System.Net.Http.ByteArrayContent -ArgumentList (, [IO.File]::ReadAllBytes($SmokeImage))
+                $ImageContent = New-Object System.Net.Http.ByteArrayContent -ArgumentList (, [IO.File]::ReadAllBytes($SmokeImages[$View]))
                 $ImageContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("image/png")
                 $Multipart.Add($ImageContent, $View, "client-name-$View.png")
             }
@@ -187,7 +222,7 @@ try {
             maximum_perspective_ratio = 3.0
             maximum_homography_condition_number = 1000000.0
             maximum_marker_edge_residual_px = 2.0
-            rectified_pixels_per_mm = 4.0
+            rectified_pixels_per_mm = 2.0
         } | ConvertTo-Json
         $Profile = Invoke-RestMethod `
             -Uri "http://127.0.0.1:$Port/api/calibration/profiles" `
@@ -264,11 +299,115 @@ try {
             throw "The Phase 2 calibration test persisted an unexpected runtime file."
         }
 
+        $MeasurementOptions = Invoke-RestMethod `
+            -Uri "http://127.0.0.1:$Port/api/measurements/options" -Method Get -TimeoutSec 5
+        if (-not $MeasurementOptions.capture_setup.processing_enabled -or
+            $MeasurementOptions.capture_setup.id -ne "phase3-smoke-rig") {
+            throw "Phase 3 qualified capture setup was not reported safely."
+        }
+
+        $StoredSourceFiles = @(
+            Get-ChildItem -LiteralPath (Join-Path $SmokeRoot "scans") -Recurse -File |
+                Where-Object FullName -NotMatch "[\\/]measurements[\\/]"
+        )
+        if ($StoredSourceFiles.Count -ne 3) {
+            throw "Phase 3 smoke setup did not retain exactly three original scan images."
+        }
+        $SourceHashesBefore = @{}
+        foreach ($SourceFile in $StoredSourceFiles) {
+            $SourceHashesBefore[$SourceFile.FullName] = (Get-FileHash -LiteralPath $SourceFile.FullName -Algorithm SHA256).Hash
+        }
+
+        $MeasurementRequestId = [guid]::NewGuid().ToString()
+        $MeasurementBody = @{
+            request_id = $MeasurementRequestId
+            expected_calibration_profile_id = $Profile.id
+            expected_capture_setup_id = "phase3-smoke-rig"
+            capture_contract_acknowledged = $true
+            reprocess_of_measurement_id = $null
+        } | ConvertTo-Json
+        $MeasurementResponse = Invoke-WebRequest `
+            -Uri "http://127.0.0.1:$Port/api/scans/$($CreatedScan.id)/measurements" `
+            -Method Post -ContentType "application/json" -Body $MeasurementBody `
+            -UseBasicParsing -TimeoutSec 90
+        $Measurement = $MeasurementResponse.Content | ConvertFrom-Json
+        if ($MeasurementResponse.StatusCode -ne 201 -or $Measurement.status -ne "succeeded" -or
+            $Measurement.per_view_measurements.Count -ne 3 -or
+            $Measurement.dimension_results.Count -ne 3 -or $Measurement.previews.Count -ne 3 -or
+            $Measurement.final_dimensions.length_mm -lt 235 -or
+            $Measurement.final_dimensions.length_mm -gt 245 -or
+            $Measurement.final_dimensions.width_mm -lt 135 -or
+            $Measurement.final_dimensions.width_mm -gt 145 -or
+            $Measurement.final_dimensions.height_mm -lt 115 -or
+            $Measurement.final_dimensions.height_mm -gt 125) {
+            throw "Phase 3 deterministic measurement response was incomplete or out of bounds."
+        }
+        if ($MeasurementResponse.Content -match "storage_key|lease_token|request_signature" -or
+            $MeasurementResponse.Content.Contains($SmokeRoot) -or
+            $MeasurementResponse.Content.Contains($FixtureRoot)) {
+            throw "Phase 3 measurement response exposed private information."
+        }
+
+        $ReplayResponse = Invoke-WebRequest `
+            -Uri "http://127.0.0.1:$Port/api/scans/$($CreatedScan.id)/measurements" `
+            -Method Post -ContentType "application/json" -Body $MeasurementBody `
+            -UseBasicParsing -TimeoutSec 10
+        $Replay = $ReplayResponse.Content | ConvertFrom-Json
+        if ($ReplayResponse.StatusCode -ne 200 -or $Replay.id -ne $Measurement.id) {
+            throw "Phase 3 request replay did not return the same immutable attempt."
+        }
+
+        foreach ($Preview in $Measurement.previews) {
+            $PreviewResponse = Invoke-WebRequest `
+                -Uri "http://127.0.0.1:$Port$($Preview.api_url)" `
+                -UseBasicParsing -TimeoutSec 10
+            if ($PreviewResponse.StatusCode -ne 200 -or
+                $PreviewResponse.Headers["Content-Type"] -notmatch "^image/png" -or
+                $PreviewResponse.Headers["Cache-Control"] -ne "no-store") {
+                throw "A Phase 3 private annotated preview failed validation."
+            }
+        }
+
+        $ReprocessBody = @{
+            request_id = [guid]::NewGuid().ToString()
+            expected_calibration_profile_id = $Profile.id
+            expected_capture_setup_id = "phase3-smoke-rig"
+            capture_contract_acknowledged = $true
+            reprocess_of_measurement_id = $Measurement.id
+        } | ConvertTo-Json
+        $Reprocessed = Invoke-RestMethod `
+            -Uri "http://127.0.0.1:$Port/api/scans/$($CreatedScan.id)/measurements" `
+            -Method Post -ContentType "application/json" -Body $ReprocessBody -TimeoutSec 90
+        if ($Reprocessed.status -ne "succeeded" -or $Reprocessed.id -eq $Measurement.id -or
+            $Reprocessed.reprocess_of_measurement_id -ne $Measurement.id) {
+            throw "Phase 3 explicit reprocessing did not create a linked immutable attempt."
+        }
+        $EarlierAttempt = Invoke-RestMethod `
+            -Uri "http://127.0.0.1:$Port/api/scans/$($CreatedScan.id)/measurements/$($Measurement.id)" `
+            -Method Get -TimeoutSec 10
+        if ($EarlierAttempt.id -ne $Measurement.id -or
+            $EarlierAttempt.final_dimensions.length_mm -ne $Measurement.final_dimensions.length_mm) {
+            throw "Phase 3 reprocessing changed the earlier immutable attempt."
+        }
+        foreach ($SourceFile in $StoredSourceFiles) {
+            $HashAfter = (Get-FileHash -LiteralPath $SourceFile.FullName -Algorithm SHA256).Hash
+            if ($HashAfter -ne $SourceHashesBefore[$SourceFile.FullName]) {
+                throw "Phase 3 processing modified an original scan image."
+            }
+        }
+
         $CalibrationPage = Invoke-WebRequest `
             -Uri "http://127.0.0.1:$Port/calibration" -UseBasicParsing -TimeoutSec 5
         if ($CalibrationPage.StatusCode -ne 200 -or
             $CalibrationPage.Content -notmatch '<div id="root"></div>') {
             throw "Direct production navigation to /calibration did not use the SPA fallback."
+        }
+        $MeasurementPage = Invoke-WebRequest `
+            -Uri "http://127.0.0.1:$Port/scans/$($CreatedScan.id)/measurements/$($Measurement.id)" `
+            -UseBasicParsing -TimeoutSec 5
+        if ($MeasurementPage.StatusCode -ne 200 -or
+            $MeasurementPage.Content -notmatch '<div id="root"></div>') {
+            throw "Direct production measurement-result navigation did not use the SPA fallback."
         }
         $UnknownClient = New-Object System.Net.Http.HttpClient
         try {
@@ -285,7 +424,7 @@ try {
             $UnknownClient.Dispose()
         }
 
-        Write-Host "Phase 2 smoke test passed at http://127.0.0.1:$Port" -ForegroundColor Green
+        Write-Host "Phase 3 smoke test passed at http://127.0.0.1:$Port" -ForegroundColor Green
     } finally {
         Pop-Location
     }
