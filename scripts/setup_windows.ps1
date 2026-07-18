@@ -63,6 +63,9 @@ try {
     Invoke-Checked "Installing locked Python development dependencies" {
         & $Python -m pip install --require-hashes -r requirements-dev.lock
     }
+    Invoke-Checked "Checking NumPy and OpenCV marker support" {
+        & $Python -c "import cv2, numpy; required=('DICT_4X4_50','DICT_5X5_50','DICT_6X6_50'); assert hasattr(cv2, 'aruco'); assert hasattr(cv2.aruco, 'ArucoDetector'); assert hasattr(cv2.aruco, 'generateImageMarker'); [cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, name)) for name in required]; print(f'NumPy {numpy.__version__}; OpenCV {cv2.__version__}; ArUco marker support ready')"
+    }
     Invoke-Checked "Installing locked frontend dependencies" {
         npm --prefix frontend ci
     }

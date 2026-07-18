@@ -54,7 +54,7 @@ describe("HealthStatus", () => {
           status: "ok",
           service: "Local AI SKU Dimensioner",
           version: "0.1.0",
-          database: { status: "ok", revision: "0002_phase1_scans" },
+          database: { status: "ok", revision: "0003_phase2_calibration_profiles" },
         }),
       ),
     );
@@ -63,7 +63,7 @@ describe("HealthStatus", () => {
 
     expect(await screen.findByRole("heading", { name: "Foundation ready" })).toBeVisible();
     expect(screen.getByText("Online · v0.1.0")).toBeVisible();
-    expect(screen.getByText("Ready · 0002_phase1_scans")).toBeVisible();
+    expect(screen.getByText("Ready · 0003_phase2_calibration_profiles")).toBeVisible();
   });
 
   it("shows a safe backend failure message", async () => {

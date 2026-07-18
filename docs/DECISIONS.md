@@ -151,3 +151,67 @@ the complete request first. File count and each file's bytes are bounded while t
 the body, malformed parser failures use the public structured error shape, and parsed temporary
 files are always closed after orchestration. Pillow validation remains the second content-safety
 boundary after parser-level resource limits.
+
+## D-019 — Keep calibration profiles immutable and activation explicit
+
+**Status:** Accepted
+
+Phase 2 stores marker configuration and numeric acceptance thresholds in immutable profiles. Only
+activation can change after creation. Activation obtains a SQLite writer reservation, deactivates the
+current row, flushes, activates the selected row, and commits once. A partial unique index on active
+rows is the final invariant, so rollback or concurrent requests cannot leave multiple active profiles.
+
+## D-020 — Restrict ArUco support and generate exact-size SVG locally
+
+**Status:** Accepted
+
+Phase 2 supports only `DICT_4X4_50`, `DICT_5X5_50`, and `DICT_6X6_50`, IDs 0 through 49, with a
+one-bit marker border. The server generates deterministic script-free SVG whose black-square width
+and height use the profile millimetres. Operators must print at actual size and physically verify the
+black square; printer settings are outside software control.
+
+## D-021 — Keep marker-plane geometry separate from product geometry
+
+**Status:** Accepted
+
+OpenCV returns canonical printed-marker corners, a pixel-to-marker-millimetre homography, its inverse,
+and a marker-only rectification. These values establish reference-plane evidence only. Phase 2 does
+not locate a product or apply the marker scale to length, breadth, height, volume, or any contour.
+
+## D-022 — Name border residual as localization quality
+
+**Status:** Accepted
+
+The independent marker-border metric samples local image gradients around all four fitted edges and
+reports RMS residual, maximum residual, total samples, and per-edge RMS. It is named
+`marker_edge_localization_residual`; it is not represented as certified camera reprojection error.
+Insufficient evidence or a maximum residual above the immutable profile threshold fails the test.
+
+## D-023 — Keep calibration tests bounded and ephemeral
+
+**Status:** Accepted
+
+The calibration test accepts exactly one bounded multipart image, reuses the full Phase 1 content
+validation chain, applies EXIF orientation, and analyzes it in memory. Test images and generated PNG
+previews are not written to SQLite or the filesystem. Preview dimensions and encoded sizes are
+bounded, and raw OpenCV errors and local paths remain behind the structured error boundary.
+Rectified previews must retain the reported rectified dimensions. If lossless encoding cannot fit
+the byte ceiling, the test fails safely rather than resizing the preview independently of geometry.
+
+## D-024 — Resolve and capability-check headless OpenCV
+
+**Status:** Accepted
+
+Python dependencies remain declared by range in `pyproject.toml` and resolved through generated hash
+locks. Phase 2 resolved NumPy 2.4.6 and `opencv-contrib-python-headless` 4.13.0.92 for Python 3.11.
+Windows setup imports both and explicitly verifies `cv2.aruco`, `ArucoDetector`, marker generation,
+and all three approved dictionaries after installation.
+
+## D-025 — Bind calibration evidence to its immutable profile
+
+**Status:** Accepted
+
+The Calibration page displays the producing profile name and ID with every successful evidence set.
+Changing the selected profile clears prior evidence, errors, and retry state, and stale asynchronous
+results are not rendered for a different profile. Retrying the same image is available only while
+the profile that originated the attempt remains selected.
